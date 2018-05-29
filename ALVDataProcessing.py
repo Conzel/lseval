@@ -458,11 +458,12 @@ def schoepeProcess(regString = r"DLS.*\.txt", samplereg = "_", path = os.getcwd(
         txpath = path + "\\" + ALV.samplename + "Fit.txt"
         if not os.path.isfile(txpath):
             with open(txpath, "w+") as txfile:
-                txfile.write("Angle\t\tq^2\t\t\tA\t\tGamma [1/s]\t\t\n")
+                txfile.write("Angle\t\tq^2\t\t\t\tA\t\tGamma [1/s]\t\tMeanCR0 \t\t\n")
         
         with open(txpath, "a") as txfile:
             txfile.write(str(ALV.angle) + "\t\t" + "%.4E" % ALV.q**2 + "\t\t" + \
-                         "%.4f" % ALV.A + "\t\t" + "%.4f" %ALV.gamma + "\t\t\n")
+                         "%.4f" % ALV.A + "\t\t" + "%.4f" %ALV.gamma + "\t\t" + \
+                         "%.4f" % ALV.countrate + "\t\t\n")
         
     # plottet Gamma gegen q^2, gewinnt daraus Diffusionskoeffizient
     namediff = None
@@ -470,6 +471,9 @@ def schoepeProcess(regString = r"DLS.*\.txt", samplereg = "_", path = os.getcwd(
         if namediff == None or not namediff == ALV.samplename:
             qList = []
             gammaList = []
+            aList = []
+            angleList = []
+            countList = []
             namediff = ALV.samplename
             txpath = ALV.createDir() + "\\" + ALV.samplename + "Fit.txt"
             with open(txpath, "r") as txfile:
@@ -478,9 +482,12 @@ def schoepeProcess(regString = r"DLS.*\.txt", samplereg = "_", path = os.getcwd(
                     line = line.split("\t\t")
                     qList.append(float(line[1]))
                     gammaList.append(float(line[3]))
+                    angleList.append(float(line[0]))
+                    aList.append(float(line[2]))
+                    countList.append(float(line[4]))
                     
             # Muss aus irgendwelchen Gründen ein numpy array sein
-            # plottet 
+            # plottet gamma, mit von gamma
             plt.figure(ALV.samplename, dpi = 100)
             plt.clf()
             qList = np.array(qList)
@@ -496,12 +503,35 @@ def schoepeProcess(regString = r"DLS.*\.txt", samplereg = "_", path = os.getcwd(
             plt.savefig(ALV.createDir() + "\\" + ALV.samplename + "GammaFit.png")
             plt.close()
             
+            #plots intercept over angle
+            plt.figure(ALV.samplename, dpi = 100)
+            plt.clf()
+            plt.plot(angleList, aList, ' bo', markersize = 2, label = "y-Intercept")
+            plt.legend()
+            plt.title(ALV.samplename + ", y-Intercept over angle")
+            plt.xlabel(r"$\theta$ in °")
+            plt.ylabel("y-intercept (from fit)")
+            plt.savefig(ALV.createDir() + "\\" + ALV.samplename + "y-intercept.png")
+            plt.close()
+            
+            
+            #plots Mean Countrate over angle
+            plt.figure(ALV.samplename, dpi = 100)
+            plt.clf()
+            plt.plot(angleList, countList, ' bo', markersize = 2, label = "meanCR")
+            plt.legend()
+            plt.title(ALV.samplename + ", meanCR over angle")
+            plt.xlabel(r"$\theta$ in °")
+            plt.ylabel("Mean Countrate")
+            plt.savefig(ALV.createDir() + "\\" + ALV.samplename + "meanCR.png")
+            plt.close()
+            
             hydr = getHydroDynR(diffcoff, ALV.visc, ALV.temp)
             
             with open(txpath, "a") as tx:
                 tx.write("\nDiffusion coefficient: " + str(diffcoff))
                 tx.write("\nHydrodynamic Radius [m]: " + str(hydr))
-
+    
     input("Erfolgreich abgeschlossen. Enter drücken um das Programm zu beenden.")
 #    return            
     
