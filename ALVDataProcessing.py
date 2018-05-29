@@ -8,6 +8,9 @@ zuletzt modifiziert: 28.04.2018
 #import matplotlib
 #matplotlib.use("Agg")
 
+import re
+import math
+
 print("Programm zur ALV-Daten Aufbereitung. Nähere Infos zur Benutzung in der ReadMe.")
 
 try:
@@ -101,7 +104,6 @@ def getDynData(filename):
                 flag1 = False
                 flag2 = True
                 
-    print(stdDevL)
     return delayL, akfL, stdDevL
 
 class ALVData(object):
@@ -133,6 +135,7 @@ class ALVData(object):
         self.gamma = None
         self.A = None
         self.q = 4*np.pi * self.refInd / self.wavelength * np.sin(np.deg2rad(self.angle/2))
+        self.countrate = getConstVal(filename, "MeanCR0")
         
     def __str__(self):
         return self.filename
@@ -161,7 +164,7 @@ class ALVData(object):
     def saveAKF(self, filepath):
         """
         Saves Plot of the autocorrelation function versus the delay time tau
-        in a file.
+        in a file, fitted in a single exponential.
         
         filepath: Path of the file where the plot should be saved to.
         """
@@ -182,6 +185,46 @@ class ALVData(object):
         plt.close()
         return
     
+    def saveAKFln(self, imagepath, datarange):
+        """
+        Saves plot of log(g2(q,tau) - 1) (log(FAKF)) versus the delay time tau
+        in a file, fitted with a linear fit. Only uses the data contained
+        in the indices specified by datarange.
+        
+        Input:
+            imagepath: string, full path, indicating where the image should be saved.
+            datarange: tuple, containing start and end indices of the data.
+            
+        Output:
+            Imagefile of log(g2 -1) over tau.
+        """
+        plt.figure(self.filename, dpi = 100)
+        plt.clf()
+        start, end = datarange
+        
+        # setting up log(g2 - 1), g2 - 1 also called g1
+        lgg1 = [math.log(self.akf[n]) for n in range(start, end)]
+        delay = self.delay[start:end]
+        
+        plt.plot(delay, lgg1, " bo", label = "log(g2 - 1) data", markersize = 2)
+        fitfun = lambda x, a, b: a + b*x
+        popt, pcov = sco.curve_fit(fitfun,\
+                                   delay, lgg1)
+        plt.plot(delay, fitfun(delay, *popt), '-r', label = "linear fit")
+        plt.legend()
+        plt.xlabel("Delay Time " + chr(964) + " [ms]")
+        plt.ylabel("log(g2(q," + chr(964) + ") - 1)")
+        plt.title(self.samplename + ", Angle " + str(self.angle) + "°")
+        self.A = popt[0]
+        self.gamma = popt[1]
+        
+        plt.savefig(imagepath)
+        plt.close()
+        return
+        
+        
+        
+        
     def createDir(self):
         """
         Creates a directory for the current unique sample, if the directory
@@ -209,15 +252,38 @@ def fitlin(xdata, ydata):
     popt, pcov = sco.curve_fit(linfun, xdata, ydata)
     return popt, pcov
 
-def getALVFiles():
+def getALVFiles(path = os.getcwd(), searchString = "_averaged.ASC"):
     """
     Prints out a list of all filenames from the "_averaged.ASC" files that
     are in the current working directory.
     """
-    fileList = os.listdir()
+    fileList = os.listdir(path)
     ALVList = []
     for name in fileList:
-        if name.endswith("_averaged.ASC"):
+        if name.endswith(searchString):
+            ALVList.append(name)
+    return ALVList
+
+def getALVFilesReg(regex, path = os.getcwd()):
+    """
+    Prints out a list of all filenames in a path that match the given regexp &
+    are in the specified path.
+    
+    Works the same as getALVFiles, but uses identifier from start.
+    
+    Input:
+        regex: string of regular expression.
+        path: full path to folder, default: current directory
+        
+    Output:
+        List of filenames that match the regex.
+    """
+    fileList = os.listdir(path)
+    ALVList = []
+    regex = re.compile(regex)
+    for name in fileList:
+        matchobj = regex.match(name)
+        if not matchobj == None:
             ALVList.append(name)
     return ALVList
 
@@ -228,14 +294,14 @@ def runtest():
     z.createDir()
     return
 
-def createALVObjs():
+def createALVObjs(regex = r".*averaged\.ASC", path = os.getcwd()):
     """
     Extracts filenames from current working directory and returns a list 
     with ALVObjects.
     
     returns: List of ALVData object extracted from the filenames in the dir.
     """
-    fileList = getALVFiles()
+    fileList = getALVFilesReg(regex)
     objList = []
     for file in fileList:
         objList.append(ALVData(file))
@@ -252,7 +318,7 @@ def getHydroDynR(diff, visc, temp):
     rhyd = KB * temp / (6 * np.pi * visc * diff)
     return rhyd
 
-def main():
+def fajunProcess():
     """
     Takes list of ALV objects, saves their autocorrelation figures + plot in 
     the corresponding directory. Saves fitting parameters in a .txt file.
@@ -330,7 +396,111 @@ def main():
     return
     
 
-main()
+def schoepeProcess(regString = r"DLS.*\.txt", path = os.getcwd(), fallOffFunction = (lambda x: 0.93*x),
+                   channelStart = 7):
+    """
+    Takes in a path. Creates ALV Objects from the ALV files contained in the path.
+    Reduces Data contained in the samples, start with the value given in 
+    channelStart and ending after the initial value has fallen under a certain 
+    point specified by the fallOffFunction in dependence of the initial value.
+    
+    The log of the correlation function then gets plotted over the delay time
+    (ln (g^2(q,tau) -1) again tau) and fitted in a linear function.
+    
+    The intercept that is obtained in the linear function for every ALVObject
+    is then plotted against the scattering angle q.
+    
+    Input:
+        regString: Regular expression as string, gets compiled to reexp object
+        and passed in into getALVFiles to find files that match the regexp.
+        
+        path: string, full path to operating system 
+        
+        fallOffFunction: function that takes at the starting value (at index
+        channelStart), operates on it and determines the value where the cut-
+        off (last value that is used in the fitting later) value lies.
+        
+        channelStart: int, determine the index of the first element that should
+        be taken into consideration at data evaluation.
+        
+    Output:
+        Plots of data, relevant coefficients in .txt files.
+    """
+    objList = createALVObjs(regString)
+    
+    # deletes fit textfile should it already exist.
+    for ALV in objList:
+        path = ALV.createDir()
+        txpath = path + "\\" + ALV.samplename + "Fit.txt"
+        if os.path.isfile(txpath):
+            os.remove(txpath)
+    
+    for ALV in objList:
+        
+        #konfuse Methode um den Endpunkt herauszufinden
+        end = [k for k in range(1, len(ALV.akf)) if ALV.akf[k] \
+               < fallOffFunction(ALV.akf[channelStart])][0]
+        datarange = (channelStart, end)
+        print(datarange)
+#        
+        # Saves images to folders
+        print(ALV)
+        path = ALV.createDir()
+        impath = path + "\\" + ALV.samplename + str(int(ALV.angle)) + "Grad.png"
+        ALV.saveAKFln(impath, datarange)
+        
+        # saves fit parameters to textfile.
+        txpath = path + "\\" + ALV.samplename + "Fit.txt"
+        if not os.path.isfile(txpath):
+            with open(txpath, "w+") as txfile:
+                txfile.write("Angle\t\tq^2\t\t\tA\t\tGamma [1/s]\t\t\n")
+        
+        with open(txpath, "a") as txfile:
+            txfile.write(str(ALV.angle) + "\t\t" + "%.4E" % ALV.q**2 + "\t\t" + \
+                         "%.4f" % ALV.A + "\t\t" + "%.4f" %ALV.gamma + "\t\t\n")
+        
+    # plottet Gamma gegen q^2, gewinnt daraus Diffusionskoeffizient
+    namediff = None
+    for ALV in objList:
+        if namediff == None or not namediff == ALV.samplename:
+            qList = []
+            gammaList = []
+            namediff = ALV.samplename
+            txpath = ALV.createDir() + "\\" + ALV.samplename + "Fit.txt"
+            with open(txpath, "r") as txfile:
+                next(txfile)
+                for line in txfile:
+                    line = line.split("\t\t")
+                    qList.append(float(line[1]))
+                    gammaList.append(float(line[3]))
+                    
+            # Muss aus irgendwelchen Gründen ein numpy array sein
+            # plottet 
+            plt.figure(ALV.samplename, dpi = 100)
+            plt.clf()
+            qList = np.array(qList)
+            gammaList = np.array(gammaList)
+            plt.plot(qList, gammaList, ' ko', markersize = 2, label = "Gamma")
+            popt, pcov = fitlin(qList, gammaList)
+            diffcoff = popt[0]
+            plt.plot(qList, linfun(qList, *popt), '-r', label = "Lin. Gamma Fit, a = " + "%.2E" % diffcoff)
+            plt.legend()
+            plt.xlabel("q^2 [m^-2]")
+            plt.ylabel(r"$\Gamma$ [1/s]")
+            plt.title(ALV.samplename + ", Gamma over q^2")
+            plt.savefig(ALV.createDir() + "\\" + ALV.samplename + "GammaFit.png")
+            plt.close()
+            
+            hydr = getHydroDynR(diffcoff, ALV.visc, ALV.temp)
+            
+            with open(txpath, "a") as tx:
+                tx.write("\nDiffusion coefficient: " + str(diffcoff))
+                tx.write("\nHydrodynamic Radius [m]: " + str(hydr))
+
+    input("Erfolgreich abgeschlossen. Enter drücken um das Programm zu beenden.")
+#    return            
+    
+    return objList
 #runtest()
         
         
