@@ -31,7 +31,7 @@ def changeForAll(filepattern, setting, replace, dirpath = os.getcwd(),):
         filepatter: regex the file name matches to
     rest see changeValues
     """
-    names = os.listdir(os.getcwd())
+    names = os.listdir(dirpath)
     
     
     regex = re.compile(filepattern)
@@ -42,10 +42,43 @@ def changeForAll(filepattern, setting, replace, dirpath = os.getcwd(),):
             changeValues(dirpath + "\\" + name, setting, replace)
     return
 
+def padZeroes(numZeroes, regex1 = r"[0-9]", dirpath = os.getcwd()):
+    """
+    renames files in dirpath according to regex1 (search) and regex2 (replace
+    
+    Input:
+        regex1: raw string, regular expression that recognizes the numbers in
+        a file name.
+    """
+    
+    names = os.listdir(dirpath)
+    
+    for name in names:
+        try:
+            sampleNum = "".join((re.compile(regex1)).findall(name))
+            if len(sampleNum) == 0:
+                continue
+        except:
+            continue
+        
+        oldpath = dirpath + "\\" + name
+        
+        newNum = sampleNum.zfill(numZeroes)
+        regex2 = r"\d{" + str(len(sampleNum)) + "}"
+        newName = re.sub(regex2, newNum, name)
+        print(newName)
+        newpath = dirpath + "\\" + newName
+        
+        try:
+            os.rename(oldpath, newpath)
+        except:
+            continue
+    return
+
+padZeroes(4)
+
 #for testing
 testpath = 'C:\\Users\\AGSchoepe\\OneDrive\\Alex\\Bachelor Thesis\\Messdaten\\20182805 First-Test\\'
 setting = r"632.0*\n"
 replace = r"532.0000\n"
 filepattern = r"DLS.*\.txt"
-
-"test"
