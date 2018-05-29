@@ -47,3 +47,5 @@ testpath = 'C:\\Users\\AGSchoepe\\OneDrive\\Alex\\Bachelor Thesis\\Messdaten\\20
 setting = r"632.0*\n"
 replace = r"532.0000\n"
 filepattern = r"DLS.*\.txt"
+
+"test"
