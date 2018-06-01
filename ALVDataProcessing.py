@@ -462,7 +462,7 @@ def schoepeProcess(regString=r"DLS.*\.txt", samplereg="_", path=os.getcwd(),
     for ALV in objList:
 
         # konfuse Methode um den Endpunkt herauszufinden
-        end = [k for k in range(1, len(ALV.akf)) if ALV.akf[k]
+        end = [k for k in range(channelStart+2, len(ALV.akf)) if ALV.akf[k]
                < fallOffFunction(ALV.akf[channelStart])][0]
         datarange = (channelStart, end)
         print(datarange)
