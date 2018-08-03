@@ -3,7 +3,7 @@
 Script for DLS Data processing.
 
 @author: Alex
-zuletzt modifiziert: 28.04.2018
+zuletzt modifiziert: 03.08.2018
 """
 # import matplotlib
 # matplotlib.use("Agg")
@@ -36,6 +36,15 @@ try:
 except ImportError:
     input("os module not installed.")
 
+# Adjusts path separator depending on OS.
+if os.name == "nt":
+    PSEP = "\\"
+elif os.name == "posix":
+    PSEP = "/"
+else:
+    print("Operating System not recognized. Exiting.")
+    exit()
+
 
 def isFloat(num):
     """
@@ -47,6 +56,12 @@ def isFloat(num):
     except (TypeError, ValueError):
         return False
 
+
+def match(regExp, string):
+    """
+    returns true if regExp matches string, false otherwise.
+    """
+    return re.search(regExp, string) is not None
 
 def getConstVal(filename, Name):
     """
@@ -261,7 +276,11 @@ class ALVData(object):
 
         returns: path of the directory
         """
-        targetPath = os.getcwd() + "\\" + self.samplename
+        # Strips the samplename with .txt ending off the filename, attaches the
+        # samplename back again.
+        targetPath = re.sub(self.samplename+r"(\d+)\.(\w)+$",
+                            self.samplename, self.filename)
+
         if not os.path.exists(targetPath):
             os.makedirs(targetPath)
             return targetPath
@@ -308,7 +327,7 @@ def getHydroDynR(diffu, visc, temp):
 #     # deletes fit textfile should it already exist.
 #     for ALV in objList:
 #         path = ALV.createDir()
-#         txpath = path + "\\" + ALV.samplename + "Fit.txt"
+#         txpath = path + PSEP + ALV.samplename + "Fit.txt"
 #         if os.path.isfile(txpath):
 #             os.remove(txpath)
 #
@@ -316,12 +335,12 @@ def getHydroDynR(diffu, visc, temp):
 #         # Saves images to folders
 #         print(ALV)
 #         path = ALV.createDir()
-#         impath = path + "\\" + ALV.samplename + str(int(ALV.angle))\
+#         impath = path + PSEP + ALV.samplename + str(int(ALV.angle))\
 #             + "Grad.png"
 #         ALV.saveAKF(impath)
 #
 #         # saves fit parameters to textfile.
-#         txpath = path + "\\" + ALV.samplename + "Fit.txt"
+#         txpath = path + PSEP + ALV.samplename + "Fit.txt"
 #         if not os.path.isfile(txpath):
 #             with open(txpath, "w+") as txfile:
 #                 txfile.write("Angle\t\tq^2\t\t\tA\t\tGamma [1/s]\t\t\n")
@@ -338,7 +357,7 @@ def getHydroDynR(diffu, visc, temp):
 #             qList = []
 #             gammaList = []
 #             namediff = ALV.samplename
-#             txpath = ALV.createDir() + "\\" + ALV.samplename + "Fit.txt"
+#             txpath = ALV.createDir() + PSEP + ALV.samplename + "Fit.txt"
 #             with open(txpath, "r") as txfile:
 #                 next(txfile)
 #                 for line in txfile:
@@ -361,7 +380,7 @@ def getHydroDynR(diffu, visc, temp):
 #             plt.xlabel("q^2 [m^-2]")
 #             plt.ylabel(r"$\Gamma$ [1/s]")
 #             plt.title(ALV.samplename + ", Gamma over q^2")
-#             plt.savefig(ALV.createDir() + "\\" + ALV.samplename
+#             plt.savefig(ALV.createDir() + PSEP + ALV.samplename
 #                         + "GammaFit.png")
 #             plt.close()
 #
@@ -375,8 +394,8 @@ def getHydroDynR(diffu, visc, temp):
 #           "Enter drücken um das Programm zu beenden.")
 #     return
 
-def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
-                           saveImg=True):
+def readElementsAndProcessDLS(filenames, fitfun, start=0, fallOff=0, log=False,
+                              saveImg=True):
     """
     Simply combines basic execution of ALV Elements functions. Can take any
     amount of filenames in an array.
@@ -384,7 +403,9 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
     The possibility in saveAKF to give out a data range can be leveraged using
     the start and fallOff parameters as indicated in the saveAKF function.
 
-    filenames: list of filenames that correspond to ALV Data.
+    filenames: list of filenames that correspond to ALV Data, alternatively a
+    single string that will be converted into a list. If the path to a direc-
+    tory is given, the files inside the directory will be used as a file list.
     fitfun: fitfunction, can be supplied using the fitfunction.py
     start: array value at which fitting begins.
     fallOff: quotient at which fitting stops.
@@ -395,9 +416,22 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
 
     returns dictionary of data about the whole sample for further processing.
     """
-    # enables the function to also accept a single string as input.
+    # enables the function to also accept a single string as input, which
+    # can be a directory.
+
     if type(filenames) is str:
-        filenames = [filenames]
+        if os.path.isdir(filenames):
+            contents = os.listdir(filenames)
+            getFilesInFolder(filenames, r"\d+\.\w+$")
+            filenames = [os.getcwd() + PSEP + filenames + PSEP
+                         + name for name in contents]
+            print(filenames)
+        else:
+            filenames = [filenames]
+
+    if len(filenames) == 0:
+        print("Empty List passed into function")
+        return
 
     dataDict = {}
     meanCRs = []
@@ -415,12 +449,12 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
         savingPath = el.createDir()
 
         if saveImg:
-            impath = savingPath + "\\" + el.samplename + str(int(el.angle)) \
+            impath = savingPath + PSEP + el.samplename + str(int(el.angle)) \
                 + "Grad.png"
             el.saveAKF(impath)
 
         if log:
-            txpath = savingPath + "\\" + el.samplename + "Fit.txt"
+            txpath = savingPath + PSEP + el.samplename + "Fit.txt"
             if not os.path.isfile(txpath):
                 with open(txpath, "w+") as txfile:
                     txfile.write(
@@ -444,34 +478,96 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
 
     return dataDict
 
+# TODO:
+#     Idee für rekursive Implementation:
+#         Da createDir nun mit absoluten Pfaden arbeitet, kann die
+#         Grundlage für eine rekursive Implementation geschaffen werden:
+#         Ein Ordner (oder filenames) werden an den rekursiven Überprozess
+#         gegeben.
+#         Files werden an readElementsAndProcessDLS als Liste mit geupdatetem
+#         Pfad weitergereicht (Ordnerpfad + Name der File). Ordner werden als
+#         Argument verwendet, um den rekursiven Prozess erneut zu spawnen.
 
-def plotMeanCRs(filenames):
+
+def recursiveCall(function, filter, folder=os.getcwd()):
+    """
+    Calls the function specified recursively on a folder. Opens folder,
+    every file found on the level of the folder, that fits the filter (regExp)
+    gets passed as a list to the function. Every folder found gets used
+    to call recursiveCall again.
+
+    function: function of one argument, gets called with a list of the found
+    files on everylevel.
+    folder: starting folder, gets opened first.
+    filter: function of one input which takes in a filename and returns True
+    if the file should be passed on to function, False otherwise
+    """
+
+    # we are better off working only with absolute paths from now on. This is
+    # just a safety measure essentially, this function does not change an
+    # already absolute path at all.
+    abspath = os.path.abspath(folder)
+    folderContents = os.listdir(abspath)
+
+    files = []
+    folders = []
+    if len(folderContents) != 0:
+        for entry in folderContents:
+            if os.path.isdir(entry):
+                folders.append(entry)
+            elif filter(entry):
+                files.append(entry)
+
+        # makes the contents list a list containing full paths.
+        files = [abspath + PSEP + path for path in files]
+        if len(files) > 0:
+            function(files)
+
+        folders = [abspath + PSEP + path for path in folders]
+        if len(folders) > 0:
+            for newFolder in folders:
+                print(newFolder)
+                recursiveCall(function, filter, newFolder)
+    return
+
+
+recursiveCall(lambda x: readElementsAndProcessDLS(x, ff.cum3, 8, 0.8),
+              lambda y: match(r"^DLS_", y))
+
+def plotMeanCRsDLS(filenames):
     """
     Plots mean countrate over angle, extracted from the given filenames.
     """
     # fit function not relevant for countrate, we just take the simplest one
-    dataDict = readElementsAndProcess(filenames, ff.singleExp)
+    dataDict = readElementsAndProcessDLS(filenames, ff.singleExp)
 
     plt.figure(dataDict["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
+    plt.semilogy(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
              label="meanCR")
     plt.legend()
     plt.title(dataDict["samplename"] + ", meanCR over angle")
     plt.xlabel(r"$\theta$ in °")
     plt.ylabel("Mean Countrate")
-    plt.savefig(dataDict["path"] + "\\"
+    plt.savefig(dataDict["path"] + PSEP
                 + dataDict["samplename"] + "meanCR.png")
     plt.close()
     return
 
+#------ testing
+# reg = r"^.*\.txt$"
+# files = os.listdir(os.getcwd())
+# files = [f for f in files if re.match(reg, f) is not None]
+# readElementsAndProcessDLS(files, ff.cum3, start=8, fallOff=0.8, log=True)
+# plotMeanCRsDLS(files)
 
-reg = r"^.*\.txt$"
-files = os.listdir(os.getcwd())
-files = [f for f in files if re.match(reg, f) is not None]
-readElementsAndProcess(files, ff.cum3, start=8, fallOff=0.8, log=True)
-plotMeanCRs(files)
+#
+# sampleName = "DLS_Test_75nmDoppellinse"
+#
+# readElementsAndProcessDLS(sampleName, ff.cum3, start=10, fallOff=0.8, log=True)
 
+
+# ------- code graveyard
 #
 # def schoepeProcess(regString=r"DLS.*\.txt", samplereg="_", path=os.getcwd(),
 #                    fallOffFunction=(lambda x: 0.8*x), channelStart=12):
@@ -514,7 +610,7 @@ plotMeanCRs(files)
 #         ALV.samplename = re.split(samplereg, ALV.filename)[0]
 #
 #         path = ALV.createDir()
-#         txpath = path + "\\" + ALV.samplename + "Fit.txt"
+#         txpath = path + PSEP + ALV.samplename + "Fit.txt"
 #         if os.path.isfile(txpath):
 #             os.remove(txpath)
 #
@@ -529,12 +625,12 @@ plotMeanCRs(files)
 #         # Saves images to folders
 #         print(ALV)
 #         path = ALV.createDir()
-#         impath = path + "\\" + ALV.samplename + str(int(ALV.angle)) \
+#         impath = path + PSEP + ALV.samplename + str(int(ALV.angle)) \
 #             + "Grad.png"
 #         ALV.saveAKFln(impath, datarange)
 #
 #         # saves fit parameters to textfile.
-#         txpath = path + "\\" + ALV.samplename + "Fit.txt"
+#         txpath = path + PSEP + ALV.samplename + "Fit.txt"
 #         if not os.path.isfile(txpath):
 #             with open(txpath, "w+") as txfile:
 #                 txfile.write(
@@ -556,7 +652,7 @@ plotMeanCRs(files)
 #             angleList = []
 #             countList = []
 #             namediff = ALV.samplename
-#             txpath = ALV.createDir() + "\\" + ALV.samplename + "Fit.txt"
+#             txpath = ALV.createDir() + PSEP + ALV.samplename + "Fit.txt"
 #             with open(txpath, "r") as txfile:
 #                 next(txfile)
 #                 for line in txfile:
@@ -583,7 +679,7 @@ plotMeanCRs(files)
 #             plt.ylabel(r"$\Gamma$ [1/s]")
 #             plt.title(ALV.samplename + ", Gamma over q^2")
 #             plt.savefig(
-#                 ALV.createDir() + "\\" + ALV.samplename + "GammaFit.png")
+#                 ALV.createDir() + PSEP + ALV.samplename + "GammaFit.png")
 #             plt.close()
 #
 #             # plots intercept over angle
@@ -596,7 +692,7 @@ plotMeanCRs(files)
 #             plt.xlabel(r"$\theta$ in °")
 #             plt.ylabel("y-intercept (logarithmical, from fit)")
 #             plt.savefig(
-#                 ALV.createDir() + "\\" + ALV.samplename + "y-intercept.png")
+#                 ALV.createDir() + PSEP + ALV.samplename + "y-intercept.png")
 #             plt.close()
 #
 #             # plots Mean Countrate over angle
@@ -607,7 +703,7 @@ plotMeanCRs(files)
 #             plt.title(ALV.samplename + ", meanCR over angle")
 #             plt.xlabel(r"$\theta$ in °")
 #             plt.ylabel("Mean Countrate")
-#             plt.savefig(ALV.createDir() + "\\" + ALV.samplename + "meanCR.png")
+#             plt.savefig(ALV.createDir() + PSEP + ALV.samplename + "meanCR.png")
 #             plt.close()
 #
 #             hydr = getHydroDynR(diffcoff, ALV.visc, ALV.temp)
