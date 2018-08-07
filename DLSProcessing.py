@@ -199,7 +199,6 @@ class ALVData(object):
 
         delay = self.delay[start:len(akf)]
 
-        plt.semilogx(delay)
         plt.figure(self.filename, dpi=100)
         plt.clf()
         plt.semilogx(delay, akf, " bo", markersize=2,
@@ -235,8 +234,8 @@ class ALVData(object):
             return targetPath
 
 
-def readElementsAndProcessDLS(filenames, fitfun, start=0, fallOff=0, log=False,
-                              saveImg=True):
+def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
+                           saveImg=True):
     """
     Simply combines basic execution of ALV Elements functions. Can take any
     amount of filenames in an array.
@@ -262,9 +261,8 @@ def readElementsAndProcessDLS(filenames, fitfun, start=0, fallOff=0, log=False,
 
     if type(filenames) is str:
         if os.path.isdir(filenames):
-            contents = os.listdir(filenames)
-            ut.getFilesInFolder(filenames, r"\d+\.\w+$")
-            filenames = [os.getcwd() + PSEP + filenames + PSEP
+            contents = ut.getFilesInFolder(filenames, r"\d+\.\w+$")
+            filenames = [filenames + PSEP
                          + name for name in contents]
             print(filenames)
         else:
@@ -342,14 +340,14 @@ def readElementsAndProcessDLS(filenames, fitfun, start=0, fallOff=0, log=False,
     return dataDict
 
 
-def plotMeanCRsDLS(dataDict):
+def plotMeanCRsDLS(dataDict, plotmode=plt.plot):
     """
     Plots mean countrate over angle, extracted from the given filenames.
     """
 
     plt.figure(dataDict["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
+    plotmode(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
              label="meanCR")
     plt.legend()
     plt.title(dataDict["samplename"] + ", meanCR over angle")
@@ -361,7 +359,7 @@ def plotMeanCRsDLS(dataDict):
     return
 
 
-def plotCoherenceFactor(dataDict):
+def plotCoherenceFactor(dataDict, plotmode=plt.plot):
     """
     Plots Coherence Factor (first coefficient in fit function) over q^2.
 
@@ -373,7 +371,7 @@ def plotCoherenceFactor(dataDict):
 
     plt.figure(dataDict["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict["angles"], coherenceFactor, ' bo', markersize=2,
+    plotmode(dataDict["angles"], coherenceFactor, ' bo', markersize=2,
              label="meanCR")
     plt.legend()
     plt.title(dataDict["samplename"] + ", Coherence Factor over angle")
@@ -385,7 +383,7 @@ def plotCoherenceFactor(dataDict):
     return
 
 
-def plotGammaAndFit(dataDict):
+def plotGammaAndFit(dataDict, plotmode=plt.plot):
     """
     Plots gamma over q^2 (first coefficient in fit function) over q^2.
 
@@ -400,9 +398,9 @@ def plotGammaAndFit(dataDict):
 
     plt.figure(dataDict["samplename"], dpi=100)
     plt.clf()
-    plt.plot(qSqu, gamma, ' bo', markersize=2, label="meanCR")
+    plotmode(qSqu, gamma, ' bo', markersize=2, label="meanCR")
 
-    plt.plot(qSqu, linfun(qSqu, *popt), 'r', label="Linear fit")
+    plotmode(qSqu, linfun(qSqu, *popt), 'r', label="Linear fit")
     plt.legend()
     plt.title(dataDict["samplename"] + ", Gamma over q^2")
     plt.xlabel(r"q^2 in 1/m^2")
@@ -415,10 +413,43 @@ def plotGammaAndFit(dataDict):
     return hydrodynR
 
 
-def compareCRs(dataDict1, dataDict2):
+def plotHydrodynRadius(dataDict, plotmode=plt.plot):
+    """
+    Plots Hydrodynamic radius over countrate.
+
+    D_s = Gamma/q**2
+    """
+    visc = dataDict["visc"]
+    temp = dataDict["temp"]
+    gamma = [coeff[1] for coeff in dataDict["coeffs"]]
+    qSqu = dataDict["qSqu"]
+    hydroR = [1e9*ut.getHydroDynR(gamma[i]/qSqu[i], visc, temp)
+              for i in range(len(qSqu))]
+
+    plt.figure(dataDict["samplename"], dpi=100)
+    plt.clf()
+    plotmode(dataDict["angles"], hydroR, ' bo', markersize=2,
+             label="Hydrodynamic radius")
+
+    plt.legend()
+    plt.title(dataDict["samplename"] + ", Hydrodynamic radius over angle")
+    plt.xlabel(r"$\theta$ in °")
+    plt.ylabel("Hydrodynamic Radius in nm")
+    plt.savefig(dataDict["path"] + PSEP
+                + dataDict["samplename"] + "hydroR.png")
+    plt.close()
+
+    return
+
+
+def compareCRs(filenames1, filenames2, plotmode=plt.plot):
     """
     Compares two mean countrates (diving 1 by 2 (1/2)) and plots them.
     """
+    dataDict1 = readElementsAndProcess(filenames1, ff.singleExp,
+                                       saveImg=False)
+    dataDict2 = readElementsAndProcess(filenames2, ff.singleExp,
+                                       saveImg=False)
     CRs1 = dataDict1["meanCRs"]
     CRs2 = dataDict2["meanCRs"]
     divCR = []
@@ -427,31 +458,60 @@ def compareCRs(dataDict1, dataDict2):
 
     plt.figure(dataDict1["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict1["angles"], divCR, ' bo', markersize=2,
+    plotmode(dataDict1["angles"], divCR, ' bo', markersize=2,
              label="Mean CR divided")
 
     plt.legend()
-    plt.title(dataDict1["samplename"] + "divided by" + dataDict2["samplename"])
+    plt.title(dataDict1["samplename"] + " divided by "
+              + dataDict2["samplename"])
     plt.xlabel(r"Angle in °")
     plt.ylabel("Countrate")
     plt.savefig(dataDict1["path"] + PSEP
-                + dataDict1["samplename"] + "dividedCR.png")
+                + dataDict1["samplename"] + "By" + dataDict2["samplename"]
+                + "dividedCR.png")
     plt.close()
     return
 
 
+def dlsplot(filenames, fitfun, start=0, fallOff=0, log=False,
+            noPlot=False, plotCorr=True, plotMeanCR=True,
+            plotCoherence=True, plotGamma=True, plotHydroR=True,
+            plotmode=plt.plot):
+    """
+    Wraps up all plotting functions into one interface.
+    Attention: Setting no-plot to true overrides all plotting options.
+    """
 
-# reg = r"[0-6]\.txt$"
-files = os.listdir(os.getcwd())
-# files = [f for f in files if re.match(reg, f) is not None]
-dict = readElementsAndProcessDLS(files, ff.cum3b, start=8, fallOff=0.8, log=True)
+    if noPlot:
+        plotCorr = False
+        plotMeanCR = False
+        plotCoherence = False
+        plotGamma = False
 
+    dataDict = readElementsAndProcess(filenames, fitfun, start, fallOff,
+                                      log, plotCorr)
+    if plotMeanCR:
+        plotMeanCRsDLS(dataDict, plotmode)
+    if plotCoherence:
+        plotCoherenceFactor(dataDict, plotmode)
+    if plotGamma:
+        rad = plotGammaAndFit(dataDict, plotmode)
+        print("Hydrodynamic Radius by linear fit:", rad)
+    if plotHydroR:
+        plotHydrodynRadius(dataDict, plotmode)
 
+    return dataDict
 
-print("Hydrodynamic Radius:", plotGammaAndFit(dict))
-input("")
+# --testing
+# # reg = r"[0-6]\.txt$"
+# files = os.listdir(os.getcwd())
+# # files = [f for f in files if re.match(reg, f) is not None]
+# dict = readElementsAndProcess(files, ff.cum3b, start=8, fallOff=0.8, log=True)
+#
+# print("Hydrodynamic Radius:", plotGammaAndFit(dict))
+# input("")
 
 #
 # sampleName = "DLS_Test_75nmDoppellinse"
 #
-# readElementsAndProcessDLS(sampleName, ff.cum3, start=10, fallOff=0.8, log=True)
+# readElementsAndProcess(sampleName, ff.cum3, start=10, fallOff=0.8, log=True)

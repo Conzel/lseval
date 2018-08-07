@@ -43,7 +43,7 @@ def cum3(x, a, mu1, mu2, mu3):
         sigma = sqrt(mu2/mu1)
     mu3 stands for skewness.
     """
-    return a*np.exp(-mu1*x + mu2/2*x**2 - mu3/6*x**3)
+    return a*np.exp(-2*mu1*x + mu2/2*x**2 - mu3/6*x**3)
 
 
 def cum3b(x, a, mu1, mu2, mu3):

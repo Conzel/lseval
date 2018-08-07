@@ -1,0 +1,1 @@
+python C:\Users\AGSchoepe\Desktop\GitData\Python-DataEvaluation\lseval.py $args

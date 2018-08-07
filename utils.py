@@ -10,6 +10,16 @@ import numpy as np
 from constants import *
 
 
+# Adjusts path separator depending on OS.
+if os.name == "nt":
+    PSEP = "\\"
+elif os.name == "posix":
+    PSEP = "/"
+else:
+    print("Operating System not recognized. Exiting.")
+    exit()
+
+
 def isFloat(num):
     """
     Returns True if input is a number, otherwise False.
@@ -21,6 +31,13 @@ def isFloat(num):
         return False
 
 
+def match(regExp, string):
+    """
+    returns true if regExp matches string, false otherwise.
+    """
+    return re.search(regExp, string) is not None
+
+
 def getFilesInFolder(path=os.getcwd(), searchReg="_averaged.ASC"):
     """
     Returns a list of all filenames from the folder specified in path
@@ -29,16 +46,10 @@ def getFilesInFolder(path=os.getcwd(), searchReg="_averaged.ASC"):
     fileList = os.listdir(path)
     filteredList = []
     for name in fileList:
-        if re.match(searchReg, name):
+        print(name)
+        if match(searchReg, name):
             filteredList.append(name)
     return filteredList
-
-
-def match(regExp, string):
-    """
-    returns true if regExp matches string, false otherwise.
-    """
-    return re.search(regExp, string) is not None
 
 
 def getHydroDynR(diffu, visc, temp):
