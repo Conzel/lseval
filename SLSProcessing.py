@@ -76,14 +76,14 @@ def readElementsAndProcess(filenames):
     return dataDict
 
 
-def plotMeanCRs(dataDict):
+def plotMeanCRs(dataDict, plotmode=plt.plot):
     """
     Plots mean countrate over angle, extracted from the given filenames.
     """
 
     plt.figure(dataDict["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
+    plotmode(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
              label="meanCR")
     plt.legend()
     plt.title(dataDict["samplename"] + ", meanCR over angle")
@@ -94,7 +94,7 @@ def plotMeanCRs(dataDict):
     return
 
 
-def compareCRs(filenames1, filenames2):
+def compareCRs(filenames1, filenames2, plotmode=plt.plot):
     """
     Compares two mean countrates (diving 1 by 2 (1/2)) and plots them.
     """
@@ -108,7 +108,7 @@ def compareCRs(filenames1, filenames2):
 
     plt.figure(dataDict1["samplename"], dpi=100)
     plt.clf()
-    plt.plot(dataDict1["angles"], divCR, ' bo', markersize=2,
+    plotmode(dataDict1["angles"], divCR, ' bo', markersize=2,
              label="Mean CR divided")
 
     plt.legend()

@@ -167,15 +167,15 @@ class ALVData(object):
     def __repr__(self):
         return "ALVData("+self.filename+")"
 
-    def curveFit(self):
+    def curveFit(self, delay, akf):
         """
         Uses fitFun to plot data to single exponential autocorrelation function
         """
-        popt, pcov = sco.curve_fit(self.fitfun, self.delay, self.akf)
+        popt, pcov = sco.curve_fit(self.fitfun, delay, akf)
         self.coeffs = popt[:]
         return popt, pcov
 
-    def saveAKF(self, filepath, start=0, fallOff=-math.inf):
+    def saveAKF(self, filepath, start=0, fallOff=0):
         """
         Saves Plot of the autocorrelation function versus the delay time tau
         in a file, fitted in a single exponential. A dynamic datarange can
@@ -191,19 +191,19 @@ class ALVData(object):
         startValue = self.akf[start]
         akf = []
 
-        for el in self.akf:
-            if startValue/el > fallOff:
+        for el in self.akf[start:]:
+            if el/startValue > fallOff:
                 akf.append(el)
             else:
                 break
 
-        delay = self.delay[start:len(akf)]
+        delay = self.delay[start:len(akf)+start]
 
         plt.figure(self.filename, dpi=100)
         plt.clf()
-        plt.semilogx(delay, akf, " bo", markersize=2,
+        plt.semilogx(self.delay, self.akf, " bo", markersize=2,
                      label="Autocorrelation data")
-        popt, pcov = self.curveFit()
+        popt, pcov = self.curveFit(delay, akf)
         plt.semilogx(delay, self.fitfun(delay, *popt), '-r',
                      label="%s fit" % ff.nameOf(self.fitfun))
         plt.legend()
@@ -213,7 +213,7 @@ class ALVData(object):
 
         plt.savefig(filepath)
         plt.close()
-        return
+        return popt, pcov
 
     def createDir(self):
         """
@@ -294,8 +294,18 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
             print("Could not open " + data + ".")
             continue
 
+        startValue = el.akf[start]
+        akf = []
+
+        for k in el.akf[start:]:
+            if k/startValue > fallOff:
+                akf.append(k)
+            else:
+                break
+        delay = el.delay[start:len(akf)+start]
+
         oneFileFoundFlag = True
-        el.curveFit()
+        el.curveFit(delay, akf)
         meanCRs.append(el.meanCR)
         coefficients.append(el.coeffs)
         angles.append(el.angle)
@@ -308,7 +318,7 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
         if saveImg:
             impath = savingPath + PSEP + el.samplename + str(int(el.angle)) \
                 + "Grad.png"
-            el.saveAKF(impath)
+            el.saveAKF(impath, start, fallOff)
 
         if log:
             txpath = savingPath + PSEP + el.samplename + "Fit.txt"
@@ -317,7 +327,6 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
                     txfile.write(
                          "Angle\t\tq^2\t\t\t\tMeanCR0 \t\tFit Coeffs\n")
 
-            print(el.coeffs)
             coeffForm = list(map(lambda x: "%.4f" % x, el.coeffs))
             coeffStr = ""
             for coeff in coeffForm:
@@ -423,6 +432,7 @@ def plotHydrodynRadius(dataDict, plotmode=plt.plot):
     temp = dataDict["temp"]
     gamma = [coeff[1] for coeff in dataDict["coeffs"]]
     qSqu = dataDict["qSqu"]
+    print(dataDict)
     hydroR = [1e9*ut.getHydroDynR(gamma[i]/qSqu[i], visc, temp)
               for i in range(len(qSqu))]
 
@@ -490,6 +500,7 @@ def dlsplot(filenames, fitfun, start=0, fallOff=0, log=False,
 
     dataDict = readElementsAndProcess(filenames, fitfun, start, fallOff,
                                       log, plotCorr)
+    print(dataDict["coeffs"])
     if plotMeanCR:
         plotMeanCRsDLS(dataDict, plotmode)
     if plotCoherence:

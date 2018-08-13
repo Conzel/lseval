@@ -21,10 +21,10 @@ parser.add_argument("-ff", "--fitfunction", default="singleExp",
                              "cum2", "cum3", "cum3b"],
                     help="Fit function that is used to during fitting."
                     + "default: %(default)s")
-parser.add_argument("-st", "--start", type=int,
+parser.add_argument("-st", "--start", type=int, default=0,
                     help="First data entry that is used during fitting, if "
                     + "fitting should start at a later point.")
-parser.add_argument("-fo", "--falloff", type=float,
+parser.add_argument("-fo", "--falloff", type=float, default=0,
                     help="Can be used to set a premature end to the fit after "
                     + "the point whose value is lower than the start*falloff.")
 parser.add_argument("-r", "--recursive", action="store_true",
@@ -73,7 +73,7 @@ elif args.files == [".."]:
     files = [os.path.dirname(os.getcwd())]
     args.dir = True
 
-# DLS plotting possibilities
+# DLS plotting branch
 if not args.sls:
     fitfunc = eval("ff.%s" % args.fitfunction)
 
@@ -103,16 +103,16 @@ else:
         for file in args.files:
             if args.plotmeanCR:
                 ddict = slsp.readElementsAndProcess(file)
-                slsp.plotMeanCRs(ddict)
+                slsp.plotMeanCRs(ddict, plotmode)
 
     else:
         if args.plotmeanCR:
             ddict = slsp.readElementsAndProcess(args.files)
             print(args.files)
-            slsp.plotMeanCRs(ddict)
+            slsp.plotMeanCRs(ddict, plotmode)
 
     if args.compareCR is not None:
-        slsp.compareCRs(args.compareCR[0], args.compareCR[1])
+        slsp.compareCRs(args.compareCR[0], args.compareCR[1], plotmode)
 
 if __name__ == "__main__":
     pass
