@@ -103,3 +103,9 @@ def recursiveCall(function, filter, folder=os.getcwd()):
             for newFolder in folders:
                 recursiveCall(function, filter, newFolder)
     return
+
+def list2string(list):
+    """
+    Transforms each entry of a list into a string, returns list.
+    """
+    return [str(entry) for entry in list]

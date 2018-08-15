@@ -234,7 +234,190 @@ class ALVData(object):
             return targetPath
 
 
-def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
+class ALVSample(object):
+    """
+    Represent one sample, consisting of a number of measurements.
+    These measurements must consist of ALVData objects. The ALV Sample can then
+    be represented via different plotting and logging mechanisms to the outside
+    world.
+
+    refInd: refractive Index
+    wavelength: Wavelength
+    visc: Viscosity
+    temp: Temperature
+    samplename: samplename (every sample added to the sample must be the same!)
+    savingPath: path where to save the plots
+    """
+
+    def __init__(self, refInd, wavelength, visc, temp, samplename, savingPath):
+        self.refInd = refInd
+        self.wavelength = wavelength
+        self.visc = visc
+        self.temp = temp
+        self.samplename = samplename
+        self.path = savingPath
+        self.dataObjs = []
+        self.plotmode = plt.plot
+        self.angles = []
+        self.meanCRs = []
+        self.qSqu = []
+        self.coeffs = []
+
+    def addData(self, data):
+        """
+        Adds ALV Data objects to the samples. Accepts lists or single objects.
+        """
+        if type(data) is not list:
+            data = [data]
+        for el in data:
+            if not isinstance(el, ALVData):
+                raise("Error in ALVSample: Data given is not an ALV Object.")
+            self.dataObjs.append(el)
+            self.angles.append(el.angle)
+            self.meanCRs.append(el.meanCR)
+            self.qSqu.append(el.q**2)
+            self.coeffs.append(el.coeffs)
+        return self.dataObjs
+
+    def changePlotMode(self, plotmode):
+        """
+        Changes plotting mode, for example to semilogx or semilogy.
+        """
+        self.plotmode = plotmode
+        return self.plotmode
+
+    def plotMeanCRsDLS(self):
+        """
+        Plots mean countrate over angle, extracted from the given filenames.
+        """
+
+        plt.figure(self.samplename, dpi=100)
+        plt.clf()
+        self.plotmode(self.angles, self.meanCRs,
+                      ' bo', markersize=2, label="meanCR")
+        plt.legend()
+        plt.title(self.samplename + ", meanCR over angle")
+        plt.xlabel(r"$\theta$ in °")
+        plt.ylabel("Mean Countrate")
+        plt.savefig(self.path + PSEP
+                    + self.samplename + "meanCR.png")
+        plt.close()
+        return
+
+    def plotCoherenceFactor(self):
+        """
+        Plots Coherence Factor (first coefficient in fit function) over q^2.
+
+        Works for fitfunctions cum2, cum3, singleExp.
+        """
+        # fit function not relevant for countrate, just take the simplest one
+
+        coherenceFactor = [coeff[0] for coeff in self.coeffs]
+
+        plt.figure(self.samplename, dpi=100)
+        plt.clf()
+        self.plotmode(self.angles, coherenceFactor, ' bo', markersize=2,
+                      label="meanCR")
+        plt.legend()
+        plt.title(self.samplename + ", Coherence Factor over angle")
+        plt.xlabel(r"$\theta$ in °")
+        plt.ylabel("Coherence Factor")
+        plt.savefig(self.path + PSEP
+                    + self.samplename + "CF.png")
+        plt.close()
+        return
+
+    def plotGammaAndFit(self):
+        """
+        Plots gamma over q^2 (first coefficient in fit function) over q^2.
+
+        Works for fitfunctions cum2, cum3, singleExp.
+        """
+        gamma = [coeff[1] for coeff in self.coeffs]
+        qSqu = np.array(self.qSqu)
+
+        def linfun(x, a): return a*x
+
+        popt, pcov = sco.curve_fit(linfun, qSqu, gamma)
+
+        plt.figure(self.samplename, dpi=100)
+        plt.clf()
+        self.plotmode(qSqu, gamma, ' bo', markersize=2, label="meanCR")
+
+        self.plotmode(qSqu, linfun(qSqu, *popt), 'r', label="Linear fit")
+        plt.legend()
+        plt.title(self.samplename + ", Gamma over q^2")
+        plt.xlabel(r"q^2 in 1/m^2")
+        plt.ylabel("Gamma")
+        plt.savefig(self.path + PSEP
+                    + self.samplename + "Gamma.png")
+        plt.close()
+
+        hydrodynR = ut.getHydroDynR(popt[0], self.visc, self.temp)
+        return hydrodynR
+
+    def plotHydrodynRadius(self):
+        """
+        Plots Hydrodynamic radius over countrate.
+
+        D_s = Gamma/q**2
+        """
+        visc = self.visc
+        temp = self.temp
+        gamma = [coeff[1] for coeff in self.coeffs]
+        qSqu = np.array(self.qSqu)
+        print(self)
+        hydroR = [1e9*ut.getHydroDynR(gamma[i]/qSqu[i], visc, temp)
+                  for i in range(len(qSqu))]
+
+        plt.figure(self.samplename, dpi=100)
+        plt.clf()
+        self.plotmode(self.angles, hydroR, ' bo', markersize=2,
+                      label="Hydrodynamic radius")
+
+        plt.legend()
+        plt.title(self.samplename + ", Hydrodynamic radius over angle")
+        plt.xlabel(r"$\theta$ in °")
+        plt.ylabel("Hydrodynamic Radius in nm")
+        plt.savefig(self.path + PSEP
+                    + self.samplename + "hydroR.png")
+        plt.close()
+
+        return
+
+
+def compareCRs(filenames1, filenames2):
+    """
+    Compares two mean countrates (diving 1 by 2 (1/2)) and plots them.
+    """
+    sample1 = readElementsAndProcess(filenames1, ff.singleExp,
+                                     saveImg=False)
+    sample2 = readElementsAndProcess(filenames2, ff.singleExp,
+                                     saveImg=False)
+    CRs1 = sample1.meanCRs
+    CRs2 = sample2.meanCRs
+    divCR = []
+    for i in range(len(CRs1)):
+        divCR.append(CRs1[i]/CRs2[i])
+
+    plt.figure(sample1.samplename, dpi=100)
+    plt.clf()
+    sample1.plotmode(sample1.angles, divCR, ' bo', markersize=2,
+                     label="Mean CR divided")
+
+    plt.legend()
+    plt.title(sample1.samplename + " divided by "
+              + sample2.samplename)
+    plt.xlabel(r"Angle in °")
+    plt.ylabel("Countrate")
+    plt.savefig(sample1.path + PSEP
+                + sample1.samplename + "By" + sample2.samplename
+                + "dividedCR.png")
+    plt.close()
+    return
+
+
+def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0,
                            saveImg=True):
     """
     Simply combines basic execution of ALV Elements functions. Can take any
@@ -272,14 +455,8 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
         print("Empty List passed into function")
         return
 
-    dataDict = {}
-    meanCRs = []
-    coefficients = []
-    angles = []
-    savingPath = []
-
     # reciproke scattering vector
-    qSquareds = []
+    alvDataElements = []
 
     # indicates the return statement that at least one valid file was found
     # (or none).
@@ -294,6 +471,8 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
             print("Could not open " + data + ".")
             continue
 
+        alvDataElements.append(el)
+
         startValue = el.akf[start]
         akf = []
 
@@ -306,181 +485,23 @@ def readElementsAndProcess(filenames, fitfun, start=0, fallOff=0, log=False,
 
         oneFileFoundFlag = True
         el.curveFit(delay, akf)
-        meanCRs.append(el.meanCR)
-        coefficients.append(el.coeffs)
-        angles.append(el.angle)
-        qSquareds.append((el.q)**2)
         savingPath = el.createDir()
-        dataDict["samplename"] = el.samplename
-        dataDict["visc"] = el.visc
-        dataDict["temp"] = el.temp
 
         if saveImg:
             impath = savingPath + PSEP + el.samplename + str(int(el.angle)) \
                 + "Grad.png"
             el.saveAKF(impath, start, fallOff)
 
-        if log:
-            txpath = savingPath + PSEP + el.samplename + "Fit.txt"
-            if not os.path.isfile(txpath):
-                with open(txpath, "w+") as txfile:
-                    txfile.write(
-                         "Angle\t\tq^2\t\t\t\tMeanCR0 \t\tFit Coeffs\n")
-
-            coeffForm = list(map(lambda x: "%.4f" % x, el.coeffs))
-            coeffStr = ""
-            for coeff in coeffForm:
-                coeffStr += coeff + "\t\t"
-
-            with open(txpath, "a") as txfile:
-                txfile.write(str(el.angle) + "\t\t" + "%.4E" % el.q**2 + "\t\t"
-                             + "%.4f" % el.meanCR + "\t\t\t" + coeffStr + "\n")
-
     if not oneFileFoundFlag:
+        print("No valid file was found by the algorithm.")
         return None
 
-    dataDict["meanCRs"] = meanCRs
-    dataDict["coeffs"] = coefficients
-    dataDict["path"] = savingPath
-    dataDict["angles"] = angles
-    dataDict["fitfun"] = fitfun
-    dataDict["qSqu"] = np.array(qSquareds)
-
-    return dataDict
-
-
-def plotMeanCRsDLS(dataDict, plotmode=plt.plot):
-    """
-    Plots mean countrate over angle, extracted from the given filenames.
-    """
-
-    plt.figure(dataDict["samplename"], dpi=100)
-    plt.clf()
-    plotmode(dataDict["angles"], dataDict["meanCRs"], ' bo', markersize=2,
-             label="meanCR")
-    plt.legend()
-    plt.title(dataDict["samplename"] + ", meanCR over angle")
-    plt.xlabel(r"$\theta$ in °")
-    plt.ylabel("Mean Countrate")
-    plt.savefig(dataDict["path"] + PSEP
-                + dataDict["samplename"] + "meanCR.png")
-    plt.close()
-    return
-
-
-def plotCoherenceFactor(dataDict, plotmode=plt.plot):
-    """
-    Plots Coherence Factor (first coefficient in fit function) over q^2.
-
-    Works for fitfunctions cum2, cum3, singleExp.
-    """
-    # fit function not relevant for countrate, we just take the simplest one
-
-    coherenceFactor = [coeff[0] for coeff in dataDict["coeffs"]]
-
-    plt.figure(dataDict["samplename"], dpi=100)
-    plt.clf()
-    plotmode(dataDict["angles"], coherenceFactor, ' bo', markersize=2,
-             label="meanCR")
-    plt.legend()
-    plt.title(dataDict["samplename"] + ", Coherence Factor over angle")
-    plt.xlabel(r"$\theta$ in °")
-    plt.ylabel("Coherence Factor")
-    plt.savefig(dataDict["path"] + PSEP
-                + dataDict["samplename"] + "CF.png")
-    plt.close()
-    return
-
-
-def plotGammaAndFit(dataDict, plotmode=plt.plot):
-    """
-    Plots gamma over q^2 (first coefficient in fit function) over q^2.
-
-    Works for fitfunctions cum2, cum3, singleExp.
-    """
-    gamma = [coeff[1] for coeff in dataDict["coeffs"]]
-    qSqu = dataDict["qSqu"]
-
-    def linfun(x, a): return a*x
-
-    popt, pcov = sco.curve_fit(linfun, qSqu, gamma)
-
-    plt.figure(dataDict["samplename"], dpi=100)
-    plt.clf()
-    plotmode(qSqu, gamma, ' bo', markersize=2, label="meanCR")
-
-    plotmode(qSqu, linfun(qSqu, *popt), 'r', label="Linear fit")
-    plt.legend()
-    plt.title(dataDict["samplename"] + ", Gamma over q^2")
-    plt.xlabel(r"q^2 in 1/m^2")
-    plt.ylabel("Gamma")
-    plt.savefig(dataDict["path"] + PSEP
-                + dataDict["samplename"] + "Gamma.png")
-    plt.close()
-
-    hydrodynR = ut.getHydroDynR(popt[0], dataDict["visc"], dataDict["temp"])
-    return hydrodynR
-
-
-def plotHydrodynRadius(dataDict, plotmode=plt.plot):
-    """
-    Plots Hydrodynamic radius over countrate.
-
-    D_s = Gamma/q**2
-    """
-    visc = dataDict["visc"]
-    temp = dataDict["temp"]
-    gamma = [coeff[1] for coeff in dataDict["coeffs"]]
-    qSqu = dataDict["qSqu"]
-    print(dataDict)
-    hydroR = [1e9*ut.getHydroDynR(gamma[i]/qSqu[i], visc, temp)
-              for i in range(len(qSqu))]
-
-    plt.figure(dataDict["samplename"], dpi=100)
-    plt.clf()
-    plotmode(dataDict["angles"], hydroR, ' bo', markersize=2,
-             label="Hydrodynamic radius")
-
-    plt.legend()
-    plt.title(dataDict["samplename"] + ", Hydrodynamic radius over angle")
-    plt.xlabel(r"$\theta$ in °")
-    plt.ylabel("Hydrodynamic Radius in nm")
-    plt.savefig(dataDict["path"] + PSEP
-                + dataDict["samplename"] + "hydroR.png")
-    plt.close()
-
-    return
-
-
-def compareCRs(filenames1, filenames2, plotmode=plt.plot):
-    """
-    Compares two mean countrates (diving 1 by 2 (1/2)) and plots them.
-    """
-    dataDict1 = readElementsAndProcess(filenames1, ff.singleExp,
-                                       saveImg=False)
-    dataDict2 = readElementsAndProcess(filenames2, ff.singleExp,
-                                       saveImg=False)
-    CRs1 = dataDict1["meanCRs"]
-    CRs2 = dataDict2["meanCRs"]
-    divCR = []
-    for i in range(len(CRs1)):
-        divCR.append(CRs1[i]/CRs2[i])
-
-    plt.figure(dataDict1["samplename"], dpi=100)
-    plt.clf()
-    plotmode(dataDict1["angles"], divCR, ' bo', markersize=2,
-             label="Mean CR divided")
-
-    plt.legend()
-    plt.title(dataDict1["samplename"] + " divided by "
-              + dataDict2["samplename"])
-    plt.xlabel(r"Angle in °")
-    plt.ylabel("Countrate")
-    plt.savefig(dataDict1["path"] + PSEP
-                + dataDict1["samplename"] + "By" + dataDict2["samplename"]
-                + "dividedCR.png")
-    plt.close()
-    return
+    # initializes ALV Sample to be returned
+    first = alvDataElements[0]
+    sample = ALVSample(first. refInd, first.wavelength, first.visc, first.temp,
+                       first.samplename, savingPath)
+    sample.addData(alvDataElements)
+    return sample
 
 
 def dlsplot(filenames, fitfun, start=0, fallOff=0, log=False,
@@ -498,31 +519,54 @@ def dlsplot(filenames, fitfun, start=0, fallOff=0, log=False,
         plotCoherence = False
         plotGamma = False
 
-    dataDict = readElementsAndProcess(filenames, fitfun, start, fallOff,
-                                      log, plotCorr)
-    print(dataDict["coeffs"])
+    sample = readElementsAndProcess(filenames, fitfun,
+                                    start, fallOff, plotCorr)
+    sample.changePlotMode(plotmode)
+
+    print(sample.coeffs)
     if plotMeanCR:
-        plotMeanCRsDLS(dataDict, plotmode)
+        sample.plotMeanCRsDLS()
     if plotCoherence:
-        plotCoherenceFactor(dataDict, plotmode)
+        sample.plotCoherenceFactor()
     if plotGamma:
-        rad = plotGammaAndFit(dataDict, plotmode)
+        rad = sample.plotGammaAndFit()
         print("Hydrodynamic Radius by linear fit:", rad)
     if plotHydroR:
-        plotHydrodynRadius(dataDict, plotmode)
+        sample.plotHydrodynRadius()
 
-    return dataDict
+    # Logging Mechanism: Prepares results for reading out via origin/other
+    # data evaulation programs
+    if log:
+        txpath = sample.path + PSEP + sample.samplename + "log.asc"
+        with open(txpath, "w+") as txfile:
 
-# --testing
-# # reg = r"[0-6]\.txt$"
-# files = os.listdir(os.getcwd())
-# # files = [f for f in files if re.match(reg, f) is not None]
-# dict = readElementsAndProcess(files, ff.cum3b, start=8, fallOff=0.8, log=True)
-#
-# print("Hydrodynamic Radius:", plotGammaAndFit(dict))
-# input("")
+            # Writes Header, containing information about sample
+            angles = ut.list2string(sample.angles)
+            columnTitles = "Delay Time\t" + "Deg \t".join(angles)+"\n"
+            txfile.write(columnTitles)
 
-#
-# sampleName = "DLS_Test_75nmDoppellinse"
-#
-# readElementsAndProcess(sampleName, ff.cum3, start=10, fallOff=0.8, log=True)
+            header = "Wavelength\t" + str(sample.wavelength) + "\n" \
+                     + "Viscosity\t" + str(sample.visc) + "\n" \
+                     + "Temperature\t" + str(sample.temp) + "\n" \
+                     + "Ref. Ind\t" + str(sample.refInd) + "\n"
+#                     + "q^2\t" + ut.list2string(sample.qSqu) + "\n"
+
+            txfile.write(header)
+
+            # assumes delay times are equal for every data entry in the sample
+            delayTimes = ut.list2string(sample.dataObjs[0].delay)
+            for i in range(len(delayTimes)):
+                entry = [str(data.akf[i]) for data in sample.dataObjs]
+                txfile.write(delayTimes[i] + "\t" + "\t".join(entry) + "\n")
+
+        # writes mean Countrate data to separate file
+        pathmeanCR = sample.path + PSEP + sample.samplename + "CR.asc"
+        with open(pathmeanCR, "w+") as crfile:
+            angles = ut.list2string(sample.angles)
+            columnTitles = "\t".join(angles)+"\n"
+            crfile.write(columnTitles)
+            print(sample.meanCRs)
+            crs = ut.list2string(sample.meanCRs)
+            crfile.write("\t".join(crs) + "\n")
+
+    return sample

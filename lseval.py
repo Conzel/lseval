@@ -30,7 +30,8 @@ parser.add_argument("-fo", "--falloff", type=float, default=0,
 parser.add_argument("-r", "--recursive", action="store_true",
                     help="Reserved for future use.")
 parser.add_argument("-l", "--log", action="store_true",
-                    help="Saves some stats in a txt file.")
+                    help="Saves the stats of the Delay and AKF in a format "
+                    + "readable by origin and the like.")
 parser.add_argument("-sls", action="store_true",
                     help="Uses SLS mode for data evaluation."
                     + "Only -pmcr, -cmp work.")
