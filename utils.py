@@ -109,3 +109,25 @@ def list2string(list):
     Transforms each entry of a list into a string, returns list.
     """
     return [str(entry) for entry in list]
+
+
+def avi2frames(name, directory="frames"):
+    """
+    Takes in name of an avi file (or path) and transforms it into sequence of
+    frames that are saved in a new directory specified by directory.
+
+    name: name of avi file to use (or path)
+    directory: directory where to save the frames to
+    """
+    import cv2
+    vidcap = cv2.VideoCapture(name)
+    success, image = vidcap.read()
+    os.makedirs(directory)
+    if not success:
+        print("Video read failed.")
+    count = 0
+    while success:
+        cv2.imwrite(directory + "\\frame%d.jpg" % count, image)
+        success, image = vidcap.read()
+        print("Read a new frame: ", success)
+        count += 1

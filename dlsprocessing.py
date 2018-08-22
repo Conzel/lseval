@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Script for DLS Data processing.
 
@@ -542,13 +542,22 @@ def dlsplot(filenames, fitfun, start=0, fallOff=0, log=False,
 
             # Writes Header, containing information about sample
             angles = ut.list2string(sample.angles)
-            columnTitles = "Delay Time\t" + "Deg \t".join(angles)+"\n"
+            qSqu = ut.list2string(sample.qSqu)
+
+            columnTitles = "Delay Time\t" + "Autocorrelation g2-1\n"
             txfile.write(columnTitles)
 
-            header = "Wavelength\t" + str(sample.wavelength) + "\n" \
-                     + "Viscosity\t" + str(sample.visc) + "\n" \
-                     + "Temperature\t" + str(sample.temp) + "\n" \
-                     + "Ref. Ind\t" + str(sample.refInd) + "\n"
+            comments = "# Parameters: Wavelength Viscosity Temperature" \
+                       + " Ref. Ind Angles q^2\n"
+
+            txfile.write(comments)
+
+            header = str(sample.wavelength) + "\n" \
+                                            + str(sample.visc) + "\n" \
+                                            + str(sample.temp) + "\n" \
+                                            + str(sample.refInd) + "\n"
+            header += "\\\t" + "\t".join(angles) + "\n" \
+                      + "\\\t" + "\t".join(qSqu) + "\n"
 #                     + "q^2\t" + ut.list2string(sample.qSqu) + "\n"
 
             txfile.write(header)
