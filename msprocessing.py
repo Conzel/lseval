@@ -58,7 +58,9 @@ def xcorr(x, y, scale='none', SciPy=True):
 
 class Speckle(object):
     """
-    Class of speckle object.
+    Class of speckle object. Represents a speckle in a camera image of a
+    multispeckle DLS setup. Can be added to a whole ensemble (every speckle
+    of the frame), from which ensemble averaged values can be calculated.
     """
 
     def __init__(self, timeInt):
@@ -98,7 +100,8 @@ class Speckle(object):
 
     def getTimeIAKF(self):
         """
-        Getter method for time Intensity Autocorrelation Function of the speckle.
+        Getter method for time Intensity Autocorrelation Function
+        of the speckle.
         """
         return self.timeIAKF
 
@@ -108,7 +111,7 @@ class Speckle(object):
         """
         return self.timeFAKF
 
-    def addInt(self, timeInt, update = True):
+    def addInt(self, timeInt, update=True):
         """
         Adds an intensity-time point to the timeInt dictionary that is held
         by the speckle. Accepts both floats and lists. Also updates timeAvg.
@@ -175,9 +178,12 @@ class Ensemble(object):
     else problems may occur.
     """
 
-    def __init__(self, speckles = []):
+    def __init__(self, speckles=[]):
         self.speckles = []
         self.numSpeckles = 0
+        self.ensembleIAKF = 0
+        self.ensembleFAKF = 0
+        self.ensembleAvg = 0
 
     def addSpeckle(self, speckles):
         """
@@ -194,6 +200,15 @@ class Ensemble(object):
         self.speckles += speckles
         self.numSpeckles = len(self.speckles)
         return
+
+    def printStats(self):
+        """
+        Prints information about the ensemble.
+        """
+        print("Number of Speckles:", self.numSpeckles)
+        print("Intensity Average:", self.ensembleAvg)
+        print("Ensemble IAKF:\n", self.ensembleIAKF)
+        print("Ensemble FAKF:\n", self.ensembleFAKF)
 
     def calcEnsembleAvg(self):
         """
@@ -214,11 +229,73 @@ class Ensemble(object):
         for speck in self.speckles:
             try:
                 eIAKF += speck.timeIAKF * speck.timeAvg**2
-            except:
+            except UnboundLocalError:
                 eIAKF = speck.timeIAKF * speck.timeAvg**2
         ensembleIAKF = eIAKF/(len(self.speckles) * self.ensembleAvg**2)
         self.ensembleIAKF = ensembleIAKF
         return
+
+    def plot(self, FAKF=True, IAKF=False, plotmode=plt.semilogx, timeStep=1):
+        """
+        Plotting Interface, can be used to display the ensemble stats to the
+        outside world.
+
+        input:
+            FAKF: bool, True plots ensemble FAKF
+            IAKF: bool, True plots ensemble IAKF
+            timeKey: list, contains the exact time-step between each image
+            that the speckles were read from. Used to scale the x-axis and to
+            Incorporate different FPS from different measurementsself.
+            Default just assumes that the time passed between each image is
+            identical.
+        """
+        numImages = len(self.speckles[0].timeInt)
+        xValues = timeStep*np.linspace(1, numImages, num=numImages)
+
+        if FAKF:
+            yValues = self.ensembleFAKF
+            if type(yValues) is int:
+                raise ValueError("No list-type FAKF detected."
+                                 + "Try updating ensemble.")
+            plt.figure("ensemble", dpi=100)
+            plt.clf()
+            plotmode(xValues, yValues, " bo", markersize=2,
+                     label="EnsembleFAKF")
+            plt.legend()
+            plt.xlabel(r"Time")
+            plt.ylabel("FAKF")
+            plt.title("Ensemble FAKF over relative timestep")
+
+            plt.savefig("EnsembleFAKF.jpg")
+            plt.close()
+
+        if IAKF:
+            yValues = self.ensembleIAKF
+            if type(yValues) is int:
+                raise ValueError("No list-type IAKF detected."
+                                 + "Try updating ensemble.")
+            plt.figure("ensemble", dpi=100)
+            plt.clf()
+            plotmode(xValues, yValues, " bo", markersize=2,
+                     label="Ensemble IAKF")
+            plt.legend()
+            plt.xlabel(r"Time")
+            plt.ylabel("IAKF")
+            plt.title("Ensemble IAKF over relative timestep")
+
+            plt.savefig("EnsembleIAKF.jpg")
+            plt.close()
+
+    def log(self):
+        """
+        Exports calculated data into machine-readable format (for use by
+        programs such as origin)
+        """
+        with open("enslog.asc", "w+") as log:
+            log.write("time \tFAKF \tIAKF\n")
+            for i in range(len(ens.ensembleFAKF)):
+                log.write(str(i) + "\t" + str(ens.ensembleFAKF[i]) + "\t"
+                          + str(ens.ensembleIAKF[i]) + "\n")
 
     def calcEnsembleFAKF(self):
         """
@@ -239,7 +316,7 @@ class Ensemble(object):
         self.calcEnsembleFAKF()
         return
 
-    def findExtremeSpeckles(self, percent, corrImg = 0, best=True,
+    def findExtremeSpeckles(self, percent, corrImg=0, best=True,
                             worst=True, sortFunc=Speckle.getTimeIAKF):
         """
         Returns Ensemble containing the most extreme speckles by sortFunc.
@@ -261,7 +338,8 @@ class Ensemble(object):
         """
 
         if corrImg > len(self.speckles[0].getIntList()):
-            raise IndexError("Correlation image higher than number of total images")
+            raise IndexError("Correlation image higher than"
+                             + "number of total images")
 
         if not (best or worst):
             print("Either fast or slow must be set to True!")
@@ -288,32 +366,45 @@ class Ensemble(object):
 
         ens = Ensemble()
         ens.addSpeckle(extremeSpeckles)
+        ens.updateEnsemble()
         return ens
 
-def readFramesSquare(directory, squareSize=10):
+
+def readFramesSquare(directory, squareSize=10, logging=True):
     """
     Accepts directory as input, reads out all the frames in the folder,
     divides the frame evenly into squares (1 square = 1 speckle),
     then reads out the mean intensity of the square. Writes the Intensity
-    of every speckle in every frame in a log file and outputs an Ensemble
-    object containing the found speckles.
+    of every speckle in every frame in a log file (if log is true)
+    and outputs an Ensemble object containing the found speckles.
 
-    directory: Directory containing the frames.
-    squareSize: Length of each square side in pixel.
+    input:
+        directory: string, Directory containing the frames.
+        squareSize: int, Length of each square side in pixel.
+
+    output:
+        ens: Ensemble object, containing the speckles found in the picture.
     """
     # Sorts frames by frame number. Frame numbers equals to timestep number.
     # Frames have to be sorted in order to correctly order akf.
     frames = [frame for frame in os.listdir(directory)
               if ut.match(r"\.bmp$", frame)]
     frames = sorted(frames, key=keyfunc)
-    print(frames)
+    print("Found data: \n" + "\n".join(frames))
+
 
     # is used in the for loop for initiliation steps. assumes all frames
     # have equal dimensions (which they should have!)
     firstFlag = True
 
+    count = 0
+
     # processing of each frame
     for f in frames:
+
+        # count used to show processing progress and to number the images
+        count += 1
+        print("Reading Frame No." +  str(count) + "...")
 
         # reads image out to a numpy matrix, dimensions are img length
         path = directory + "\\" + f
@@ -323,8 +414,8 @@ def readFramesSquare(directory, squareSize=10):
             width = len(imgMat)
             height = len(imgMat[1])
             if width % squareSize != 0 or height % squareSize != 0:
-                raise("Detector not divisble into even squares. "
-                      + "Change Square Size to proceed.")
+                raise TypeError("Detector not divisble into even squares. "
+                                + "Change Square Size to proceed.")
 
             # Determines the number of squares in both horizontal and vertical
             # direction
@@ -332,29 +423,83 @@ def readFramesSquare(directory, squareSize=10):
             numSquaresHeight = height // squareSize
 
             # Initiliazes numpy array that later holds the intensity values for
-            # every speckle. Array filled with empty lists
+            # every speckle.
             speckleInt = np.empty((numSquaresWidth, numSquaresHeight),
                                   dtype=np.object_)
             speckleInt.fill([])
             speckleInt = np.frompyfunc(list, 1, 1)(speckleInt)
-            firstFlag = False
 
+            # writes header for log data. Array filled with empty lists.
+            # Log data is not meant to be human readable, but rather for use
+            # with table calculation programs such as origin
+            if logging:
+                numSpeckles = numSquaresWidth*numSquaresHeight
+                logfilename = directory + ".asc"
+                with open(logfilename, "w+") as log:
+                    speckleString = "\t".join(["Speckle %d" % i
+                                               for i in range(numSpeckles)])
+                    log.write("Im. No." + "\t" + speckleString + "\n")
+                firstFlag = False
+        # prepares list of intensities so writing to log is easier
+        intensityList = []
+
+        # divides one frame into squares and reads
+        # the mean intensity info into the speckleInt matrix
         for x in range(numSquaresWidth):
             for y in range(numSquaresHeight):
                 pixelInts = imgMat[x*squareSize:(x+1)*squareSize,
                                    y*squareSize:(y+1)*squareSize]
                 meanInt = pixelInts.mean()
                 speckleInt[x, y].append(meanInt)
+                intensityList.append(meanInt)
 
-    return speckleInt
+        if logging:
+            with open(logfilename, "a") as log:
+                intensityString = str(count) + "\t" \
+                                  + "\t".join(ut.list2string(intensityList)) \
+                                  + "\n"
+                log.write(intensityString)
+
+    # speckleInt now contains the intensity lists of every speckle in x,y
+    # directions. An Ensemble can be initiliazed and then filled with
+    # all the speckles, that are created with the speckle intensities and then
+    # accumulated in a list.
+
+    speckleList = []
+
+    print("Creating Ensemble...")
+
+    for x in range(numSquaresWidth):
+        for y in range(numSquaresHeight):
+            speckleList.append(Speckle(speckleInt[x, y]))
+
+    ens = Ensemble()
+    ens.addSpeckle(speckleList)
+
+    print("Calculating AKFs...")
+    ens.updateEnsemble()
+
+    print("Finished.")
+
+    return ens
+
 
 def keyfunc(frame):
     """
-    Extracts number of frame from framename.
+    Extracts number of frame from framename, used to sort the frames with a
+    custom sort function.
+
+    input:
+        frame: str, name of frame.
+    output:
+        int, number of frame, extraced from name of frame
     """
     return int(re.search(r"\d+", frame).group(0))
 
-test = readFramesSquare("frames1")
+
+ens = readFramesSquare("frames1")
+ens.plot(plotmode=plt.plot)
+ens.log()
 
 
 

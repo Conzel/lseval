@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import cv2
 import os
 
-def avi2frames(name, directory="frames"):
+
+def avi2frames(name, directory="frames", numbering=0):
     """
     Takes in name of an avi file (or path) and transforms it into sequence of
     frames that are saved in a new directory specified by directory.
@@ -18,7 +18,7 @@ def avi2frames(name, directory="frames"):
         print("Video read failed.")
     count = 0
     while success:
-        cv2.imwrite(directory + "\\frame%d.bmp" % count, image)
+        cv2.imwrite(directory + "\\frame%d.bmp" % (count + numbering), image)
         success, image = vidcap.read()
         count += 1
     print("Finished. Imported %d images" % count)
@@ -26,9 +26,10 @@ def avi2frames(name, directory="frames"):
 
 name = input("Enter avi file name: ")
 dir = input("Enter destination directory: ")
+numbering = input("Enter numbering start: ")
 
 print("Importing...")
 
-avi2frames(name, dir)
+avi2frames(name, dir, numbering)
 
 input("Press enter to exit.")
