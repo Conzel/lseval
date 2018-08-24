@@ -104,6 +104,7 @@ def recursiveCall(function, filter, folder=os.getcwd()):
                 recursiveCall(function, filter, newFolder)
     return
 
+
 def list2string(list):
     """
     Transforms each entry of a list into a string, returns list.
@@ -111,23 +112,27 @@ def list2string(list):
     return [str(entry) for entry in list]
 
 
-def avi2frames(name, directory="frames"):
+def avi2frames(names, directory="frames", numbering=0):
     """
     Takes in name of an avi file (or path) and transforms it into sequence of
     frames that are saved in a new directory specified by directory.
 
-    name: name of avi file to use (or path)
+    name: name of avi files to use (or path) as list.
+          Multiple can be specified.
     directory: directory where to save the frames to
     """
     import cv2
-    vidcap = cv2.VideoCapture(name)
-    success, image = vidcap.read()
-    os.makedirs(directory)
-    if not success:
-        print("Video read failed.")
     count = 0
-    while success:
-        cv2.imwrite(directory + "\\frame%d.jpg" % count, image)
+    os.makedirs(directory, exist_ok=True)
+    for name in names:
+        vidcap = cv2.VideoCapture(name)
         success, image = vidcap.read()
-        print("Read a new frame: ", success)
-        count += 1
+        if not success:
+            print("Video read failed.")
+        print("Importing", name + "...")
+        while success:
+            cv2.imwrite(directory + "\\frame%d.bmp" % (count + numbering), image)
+            success, image = vidcap.read()
+            count += 1
+    print("Finished. Imported %d images" % count)
+    return

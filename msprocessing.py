@@ -12,7 +12,17 @@ import matplotlib.pyplot as plt
 import utils as ut
 import re
 import cv2
+import platform
+import warnings
 
+bits, linkage = platform.architecture()
+if bits == "32bit":
+    warnings.warn("Program is running in 32-bit mode, placing an upper limit "
+                  + "on usable RAM of 2 GB. This may cause memory errors "
+                  + "during calculation of Correlationfunction when a large "
+                  + "amount of images is read in. Consider running in 64 bit "
+                  + "mode.")
+    input("Press enter to proceed.")
 
 def xcorr(x, y, scale='none', SciPy=True):
     """
@@ -176,6 +186,9 @@ class Ensemble(object):
 
     All speckles should have the same number of images associated with them,
     else problems may occur.
+
+    Be sure to add a time key and update the ensemble before you do
+    any other interesting tasks with your ensemble!
     """
 
     def __init__(self, speckles=[]):
@@ -184,6 +197,7 @@ class Ensemble(object):
         self.ensembleIAKF = 0
         self.ensembleFAKF = 0
         self.ensembleAvg = 0
+        self.timeKey = 0
 
     def addSpeckle(self, speckles):
         """
@@ -200,6 +214,51 @@ class Ensemble(object):
         self.speckles += speckles
         self.numSpeckles = len(self.speckles)
         return
+
+    def createTimeKey(self, numImList, timeStepList, default=False):
+        """
+        Creates time key for logging and plotting.
+
+        Explanation: The time passed between each image may not be the same.
+        If you first take 10000 images with 1000 FPS, then 10000 images with
+        100 FPS, then 10000 images with 10 FPS, the time passed between
+        the images is different. This is of no importance for the calculation
+        of autocorrelation functions, but important for plotting. The AKFs
+        always get plotted over the timekey.
+
+        input:
+            numImList: list of integers, showing how many images are
+            in each batch.
+            timeStepList: list of floats, shows the time passed between
+            each image in a batch.
+            default: When default is used, just creates a linearly increasing
+            timekey for the number of images used. Other specified arguments
+            can be anything.
+
+        output: list of floats, showing the timeKey. Also adds timeKey to the
+        ensemble attributes.
+
+        Example: For 15 images, 10 recorded with 10 FPS and 5 with 1 FPS:
+            numImList = [10, 5]; timeStepList = [0.1, 1]
+        """
+        timeKey = []
+
+        if default:
+            timeKey = [i+1 for i in range(len(self.speckles[0].timeInt))]
+            self.timeKey = timeKey
+            return timeKey
+
+        # Throws error for incorrect numImList
+        if sum(numImList) != len(self.speckles[0].timeInt):
+            raise ValueError("Sum of images in numList not equal to total "
+                             + "number of images from frames.")
+        total = 0
+        for k in range(len(numImList)):
+            for i in range(numImList[k]):
+                total += timeStepList[k]
+                timeKey.append(total)
+        self.timeKey = timeKey
+        return timeKey
 
     def printStats(self):
         """
@@ -235,7 +294,7 @@ class Ensemble(object):
         self.ensembleIAKF = ensembleIAKF
         return
 
-    def plot(self, FAKF=True, IAKF=False, plotmode=plt.semilogx, timeStep=1):
+    def plot(self, FAKF=True, IAKF=False, plotmode=plt.semilogx):
         """
         Plotting Interface, can be used to display the ensemble stats to the
         outside world.
@@ -249,8 +308,9 @@ class Ensemble(object):
             Default just assumes that the time passed between each image is
             identical.
         """
-        numImages = len(self.speckles[0].timeInt)
-        xValues = timeStep*np.linspace(1, numImages, num=numImages)
+        xValues = self.timeKey
+        if type(xValues) is int:
+            raise ValueError("No Time key specified.")
 
         if FAKF:
             yValues = self.ensembleFAKF
@@ -266,7 +326,7 @@ class Ensemble(object):
             plt.ylabel("FAKF")
             plt.title("Ensemble FAKF over relative timestep")
 
-            plt.savefig("EnsembleFAKF.jpg")
+            plt.savefig("EnsembleFAKF.eps")
             plt.close()
 
         if IAKF:
@@ -286,16 +346,18 @@ class Ensemble(object):
             plt.savefig("EnsembleIAKF.jpg")
             plt.close()
 
-    def log(self):
+    def log(self, name="enslog.asc"):
         """
         Exports calculated data into machine-readable format (for use by
         programs such as origin)
         """
-        with open("enslog.asc", "w+") as log:
+        with open(name, "w+") as log:
             log.write("time \tFAKF \tIAKF\n")
-            for i in range(len(ens.ensembleFAKF)):
-                log.write(str(i) + "\t" + str(ens.ensembleFAKF[i]) + "\t"
-                          + str(ens.ensembleIAKF[i]) + "\n")
+            for i in range(len(self.ensembleFAKF)):
+                # truncate time key because of floating point error.
+                log.write("%.6f" % self.timeKey[i] + "\t"
+                          + str(self.ensembleFAKF[i]) + "\t"
+                          + str(self.ensembleIAKF[i]) + "\n")
 
     def calcEnsembleFAKF(self):
         """
@@ -314,7 +376,7 @@ class Ensemble(object):
         self.calcEnsembleAvg()
         self.calcEnsembleIAKF()
         self.calcEnsembleFAKF()
-        return
+        return "Updated Ensemble."
 
     def findExtremeSpeckles(self, percent, corrImg=0, best=True,
                             worst=True, sortFunc=Speckle.getTimeIAKF):
@@ -323,15 +385,25 @@ class Ensemble(object):
         Input:
             percent: float, percentage of extreme speckles (0.2 returns
             ensemble with the 20% fastest and/or 20% slowest speckles).
+
             corrIm: integer, denoting the image (and thus the point in time)
             where the extreme speckles should be found (default is the img. 0)
+
             best: bool, True includes x% best speckles in the ensemble.
+
             worst: bool, False includes x% worst speckles in the ensemble.
+
             sortFunc: Function that is used to sort the extreme speckles with.
             Standard is Intensity Autocorrelation Function, (yields fastest/
             slowest speckles) but other methods can be employed aswell (
             for example least intense / most intense speckles with
-            Speckles.getTimeInt).
+            Speckles.getTimeAverage). Best speckles means: first X speckles
+            that the sort function produces. Sort function sorts reverse,
+            so if you use intensity average over time f.e., the most intense
+            speckles (highest value) will be the first (best) speckles.
+            On the other hand, if you use getTimeIAKF, the best speckles will
+            actually be the slowest ones. best/worst is ambigous here, think
+            exactly about what values will be produced by the sort function.
 
         Return:
             Ensemble object, containing fastest and/or slowest speckles.
@@ -353,10 +425,11 @@ class Ensemble(object):
         # Sorts speckles by intensity at positiong (image) corrImg.
         # Index error means that an integer was produced by the sort function,
         # in which case we catch the error and use an unsubscripted sortFunc.
+        # Reverse
         try:
-            speckles.sort(key=lambda x: sortFunc(x)[corrImg])
+            speckles.sort(key=lambda x: sortFunc(x)[corrImg], reverse=True)
         except IndexError:
-            speckles.sort(key=lambda x: sortFunc(x))
+            speckles.sort(key=lambda x: sortFunc(x), reverse=True)
 
         extremeSpeckles = []
         if best:
@@ -367,10 +440,12 @@ class Ensemble(object):
         ens = Ensemble()
         ens.addSpeckle(extremeSpeckles)
         ens.updateEnsemble()
+        ens.timeKey = self.timeKey
         return ens
 
 
-def readFramesSquare(directory, squareSize=10, logging=True):
+def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0,0),
+                     skipEnd=(0,0)):
     """
     Accepts directory as input, reads out all the frames in the folder,
     divides the frame evenly into squares (1 square = 1 speckle),
@@ -381,7 +456,10 @@ def readFramesSquare(directory, squareSize=10, logging=True):
     input:
         directory: string, Directory containing the frames.
         squareSize: int, Length of each square side in pixel.
-
+        skipStart: tuple consisting of int, skips the first squares in (x, y)
+        direction.
+        skipEnd: tuple, consisting of int, skips the last squares in (x, y)
+        direction.
     output:
         ens: Ensemble object, containing the speckles found in the picture.
     """
@@ -392,19 +470,21 @@ def readFramesSquare(directory, squareSize=10, logging=True):
     frames = sorted(frames, key=keyfunc)
     print("Found data: \n" + "\n".join(frames))
 
-
     # is used in the for loop for initiliation steps. assumes all frames
     # have equal dimensions (which they should have!)
     firstFlag = True
 
     count = 0
 
+    xskipStart, yskipStart = skipStart
+    xskipEnd, yskipEnd = skipEnd
+
     # processing of each frame
     for f in frames:
 
         # count used to show processing progress and to number the images
         count += 1
-        print("Reading Frame No." +  str(count) + "...")
+        print("Reading Frame No." + str(count) + "...")
 
         # reads image out to a numpy matrix, dimensions are img length
         path = directory + "\\" + f
@@ -419,8 +499,8 @@ def readFramesSquare(directory, squareSize=10, logging=True):
 
             # Determines the number of squares in both horizontal and vertical
             # direction
-            numSquaresWidth = width // squareSize
-            numSquaresHeight = height // squareSize
+            numSquaresWidth = width // squareSize - xskipStart - xSkipEnd
+            numSquaresHeight = height // squareSize - ySkipStart - ySkipEnd
 
             # Initiliazes numpy array that later holds the intensity values for
             # every speckle.
@@ -497,11 +577,14 @@ def keyfunc(frame):
     return int(re.search(r"\d+", frame).group(0))
 
 
-ens = readFramesSquare("frames1")
+ens = readFramesSquare("frames")
+ens.createTimeKey([10000, 10000], [0.001, 0.01])
 ens.plot(plotmode=plt.plot)
 ens.log()
 
-
+ensB = ens.findExtremeSpeckles(0.4, best=True, worst=False,
+                               sortFunc=Speckle.getTimeAverage)
+ensB.log()
 
 
 
