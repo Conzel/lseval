@@ -444,8 +444,8 @@ class Ensemble(object):
         return ens
 
 
-def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0,0),
-                     skipEnd=(0,0)):
+def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
+                     skipEnd=(0, 0)):
     """
     Accepts directory as input, reads out all the frames in the folder,
     divides the frame evenly into squares (1 square = 1 speckle),
@@ -499,8 +499,8 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0,0),
 
             # Determines the number of squares in both horizontal and vertical
             # direction
-            numSquaresWidth = width // squareSize - xskipStart - xSkipEnd
-            numSquaresHeight = height // squareSize - ySkipStart - ySkipEnd
+            numSquaresWidth = width // squareSize - xskipStart - xskipEnd
+            numSquaresHeight = height // squareSize - yskipStart - yskipEnd
 
             # Initiliazes numpy array that later holds the intensity values for
             # every speckle.
@@ -525,8 +525,8 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0,0),
 
         # divides one frame into squares and reads
         # the mean intensity info into the speckleInt matrix
-        for x in range(numSquaresWidth):
-            for y in range(numSquaresHeight):
+        for x in range(xskipStart, numSquaresWidth - xskipEnd):
+            for y in range(yskipStart, numSquaresHeight - yskipEnd):
                 pixelInts = imgMat[x*squareSize:(x+1)*squareSize,
                                    y*squareSize:(y+1)*squareSize]
                 meanInt = pixelInts.mean()
@@ -549,8 +549,8 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0,0),
 
     print("Creating Ensemble...")
 
-    for x in range(numSquaresWidth):
-        for y in range(numSquaresHeight):
+    for x in range(xskipStart, numSquaresWidth - yskipEnd):
+        for y in range(yskipStart, numSquaresHeight - yskipEnd):
             speckleList.append(Speckle(speckleInt[x, y]))
 
     ens = Ensemble()
@@ -577,14 +577,30 @@ def keyfunc(frame):
     return int(re.search(r"\d+", frame).group(0))
 
 
-ens = readFramesSquare("frames")
-ens.createTimeKey([10000, 10000], [0.001, 0.01])
-ens.plot(plotmode=plt.plot)
-ens.log()
+ensA = readFramesSquare("frames")
+ensA.createTimeKey([10000, 10000], [0.015, 0.1])
+ensA.log("ensA.asc")
+#
+# 
+# ensB = ensA.findExtremeSpeckles(0.4, best=True, worst=False,
+#                                 sortFunc=Speckle.getTimeAverage)
+# ensB.log("ensB.asc")
+#
+#
+# ensC = readFramesSquare("frames", skipStart=(0, 8), skipEnd=(0, 12))
+# ensC.createTimeKey([10000, 10000], [0.015, 0.1])
+# ensC.log("ensC.asc")
 
-ensB = ens.findExtremeSpeckles(0.4, best=True, worst=False,
-                               sortFunc=Speckle.getTimeAverage)
-ensB.log()
+ensD = ensA.findExtremeSpeckles(0.2, best=True, worst=False,
+                                sortFunc=Speckle.getTimeAverage)
+ensD.log("ensD.asc")
+
+# ensA.printStats()
+# ensB.printStats()
+# ensC.printStats()
+ensD.printStats()
+
+
 
 
 

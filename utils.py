@@ -8,6 +8,7 @@ import os
 import re
 import numpy as np
 from constants import *
+import math
 
 
 # Adjusts path separator depending on OS.
@@ -62,6 +63,27 @@ def getHydroDynR(diffu, visc, temp):
     """
     rhyd = KB * temp / (6 * np.pi * visc * diffu)
     return rhyd
+
+
+def getQSqu(n, lambd, theta):
+    """
+    Calculates q^2 (reciproke scattering vector) from input.
+
+    n: refractive index of solvent
+    lambda: wavelength
+    theta: angle in degrees
+    """
+    return (4*np.pi*n/lambd*math.sin(math.radians(theta/2)))**2
+
+
+def hydroRfromGamma(gamma, n, lambd, theta, visc, temp):
+    """
+    Calculates hydrodynamic radius from gamma from cumulant/exponential fit of
+    DLS.
+    Input same as in getQSqu and getHydroDynR.
+    """
+    diffu = gamma/getQSqu(n, lambd, theta)
+    return getHydroDynR(diffu, visc, temp)
 
 
 def recursiveCall(function, filter, folder=os.getcwd()):
