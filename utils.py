@@ -158,3 +158,19 @@ def avi2frames(names, directory="frames", numbering=0):
             count += 1
     print("Finished. Imported %d images" % count)
     return
+
+
+def alternateWrite(lists):
+    """
+    Takes in a list of lists, produces a string that can be easily used to write
+    files. Takes every first element in every list, writes them with tabs in
+    between, then a new line if every first element has been written. Repeats
+    with 2nd element etc.
+    """
+    result = ""
+    repeats = len(lists[0])
+    for i in range(repeats):
+        for lst in lists:
+            result += lst[i] + "\t"
+        result += "\n"
+    return result

@@ -352,12 +352,12 @@ class Ensemble(object):
         programs such as origin)
         """
         with open(name, "w+") as log:
-            log.write("time \tFAKF \tIAKF\n")
+            log.write("time \tFAKF \tIAKF-1\n")
             for i in range(len(self.ensembleFAKF)):
                 # truncate time key because of floating point error.
                 log.write("%.6f" % self.timeKey[i] + "\t"
                           + str(self.ensembleFAKF[i]) + "\t"
-                          + str(self.ensembleIAKF[i]) + "\n")
+                          + str(self.ensembleIAKF[i]-1) + "\n")
 
     def calcEnsembleFAKF(self):
         """
@@ -490,6 +490,8 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
         path = directory + "\\" + f
         imgMat = cv2.imread(path, 0)
 
+# -----------------------------------------------------------------------------
+# Initiliazing log data headers and the lists that hold the data.
         if firstFlag:
             width = len(imgMat)
             height = len(imgMat[1])
@@ -503,7 +505,9 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
             numSquaresHeight = height // squareSize - yskipStart - yskipEnd
 
             # Initiliazes numpy array that later holds the intensity values for
-            # every speckle.
+            # every speckle. Weird notation: simply creates a numpy array
+            # with dimensions of number of squares, every single element
+            # being an empty list.
             speckleInt = np.empty((numSquaresWidth, numSquaresHeight),
                                   dtype=np.object_)
             speckleInt.fill([])
@@ -513,6 +517,8 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
             # Log data is not meant to be human readable, but rather for use
             # with table calculation programs such as origin
             if logging:
+
+                # log data for time intensity of every speckle
                 numSpeckles = numSquaresWidth*numSquaresHeight
                 logfilename = directory + ".asc"
                 with open(logfilename, "w+") as log:
@@ -520,11 +526,17 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
                                                for i in range(numSpeckles)])
                     log.write("Im. No." + "\t" + speckleString + "\n")
                 firstFlag = False
+
+                # initializing finished
+                firstFlag = False
+
+# -----------------------------------------------------------------------------
+
         # prepares list of intensities so writing to log is easier
         intensityList = []
 
-        # divides one frame into squares and reads
-        # the mean intensity info into the speckleInt matrix
+        # divides the frame into squares and writes
+        # the mean intensity of the square into the speckleInt matrix
         for x in range(xskipStart, numSquaresWidth - xskipEnd):
             for y in range(yskipStart, numSquaresHeight - yskipEnd):
                 pixelInts = imgMat[x*squareSize:(x+1)*squareSize,
@@ -546,17 +558,35 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
     # accumulated in a list.
 
     speckleList = []
+    speckleIAKFS = []
 
-    print("Creating Ensemble...")
+    print("Creating Speckles...")
 
     for x in range(xskipStart, numSquaresWidth - yskipEnd):
         for y in range(yskipStart, numSquaresHeight - yskipEnd):
-            speckleList.append(Speckle(speckleInt[x, y]))
+            speck = Speckle(speckleInt[x, y])
+            speckleList.append(speck)
 
+            if logging:
+                speckleIAKFS.append(ut.list2string(speck.getTimeIAKF()))
+
+    print("Writing logs...")
+    if logging:
+        # log data for IAKF of every speckle
+        logfilenameIAKF = directory + "IAKF.asc"
+        with open(logfilenameIAKF, "w+") as log:
+            speckleString = "\t".join(["Speckle %d" % i
+                                       for i in range(numSpeckles)])
+            log.write("Im. No." + "\t" + speckleString + "\n")
+            numbering = [str(i) for i in range(len(speckleIAKFS[0]))]
+            speckleIAKFS.insert(0, numbering)
+            log.write(ut.alternateWrite(speckleIAKFS))
+
+    print("Creating Ensemble...")
     ens = Ensemble()
     ens.addSpeckle(speckleList)
 
-    print("Calculating AKFs...")
+    print("Calculating Ensemble AKFs...")
     ens.updateEnsemble()
 
     print("Finished.")
@@ -577,29 +607,33 @@ def keyfunc(frame):
     return int(re.search(r"\d+", frame).group(0))
 
 
-ensA = readFramesSquare("frames")
-ensA.createTimeKey([10000, 10000], [0.015, 0.1])
-ensA.log("ensA.asc")
+# folder = input("Folder to open: ")
+# ensA = readFramesSquare(folder)
+# ensA.createTimeKey([10000, 10000], [0.015, 0.1])
+# ensA.log("ensA.asc")
 #
-# 
+#
 # ensB = ensA.findExtremeSpeckles(0.4, best=True, worst=False,
 #                                 sortFunc=Speckle.getTimeAverage)
 # ensB.log("ensB.asc")
 #
 #
-# ensC = readFramesSquare("frames", skipStart=(0, 8), skipEnd=(0, 12))
+# ensC = readFramesSquare("frames2", skipStart=(0,8), skipEnd=(0, 12))
 # ensC.createTimeKey([10000, 10000], [0.015, 0.1])
 # ensC.log("ensC.asc")
+#
+# ensD = ensA.findExtremeSpeckles(0.2, best=True, worst=False,
+#                                 sortFunc=Speckle.getTimeAverage)
+# ensD.log("ensD.asc")
+#
+# # ensA.printStats()
+# # ensB.printStats()
+# # ensC.printStats()
+# ensD.printStats()
 
-ensD = ensA.findExtremeSpeckles(0.2, best=True, worst=False,
-                                sortFunc=Speckle.getTimeAverage)
-ensD.log("ensD.asc")
-
-# ensA.printStats()
-# ensB.printStats()
-# ensC.printStats()
-ensD.printStats()
-
+ensE = readFramesSquare("frames2", squareSize=2)
+ensE.createTimeKey([10000, 10000], [0.015, 0.1])
+ensE.log("ensE.asc")
 
 
 
