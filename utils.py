@@ -9,6 +9,7 @@ import re
 import numpy as np
 from constants import *
 import math
+import matplotlib.pyplot as plt
 
 
 # Adjusts path separator depending on OS.

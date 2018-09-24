@@ -359,6 +359,23 @@ class Ensemble(object):
                           + str(self.ensembleFAKF[i]) + "\t"
                           + str(self.ensembleIAKF[i]-1) + "\n")
 
+    def logIAKF(self, directory="IAKFs", numSpeckles=0):
+        """
+        Exports calculated speckle IAKFS to machine-readable format.
+        """
+        if numSpeckles == 0 or numSpeckles > self.numSpeckles:
+            numSpeckles = self.numSpeckles
+        os.makedirs(directory, exist_ok=True)
+        for i in range(numSpeckles):
+            name = "Speckle%d.asc" % i
+            speck = self.speckles[i]
+            tIAKF = speck.getTimeIAKF()
+            with open(directory + "\\" + name, "w+") as log:
+                log.write("time [ms]\t time IAKF")
+                for k in range(len(tIAKF)):
+                    log.write("%.6f" % self.timeKey[k] + "\t")
+                    log.write(str(tIAKF[k]) + "\n")
+
     def calcEnsembleFAKF(self):
         """
         Calculates field autocorrelation function (FAKF, g1, f_E
@@ -468,6 +485,9 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
     frames = [frame for frame in os.listdir(directory)
               if ut.match(r"\.bmp$", frame)]
     frames = sorted(frames, key=keyfunc)
+    if frames == []:
+        raise ValueError("Error: Could not find any frames in the given"
+                          +  "directory. Aborting.")
     print("Found data: \n" + "\n".join(frames))
 
     # is used in the for loop for initiliation steps. assumes all frames
@@ -570,17 +590,17 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
             if logging:
                 speckleIAKFS.append(ut.list2string(speck.getTimeIAKF()))
 
-    print("Writing logs...")
-    if logging:
-        # log data for IAKF of every speckle
-        logfilenameIAKF = directory + "IAKF.asc"
-        with open(logfilenameIAKF, "w+") as log:
-            speckleString = "\t".join(["Speckle %d" % i
-                                       for i in range(numSpeckles)])
-            log.write("Im. No." + "\t" + speckleString + "\n")
-            numbering = [str(i) for i in range(len(speckleIAKFS[0]))]
-            speckleIAKFS.insert(0, numbering)
-            log.write(ut.alternateWrite(speckleIAKFS))
+    # print("Writing logs...")
+    # if logging:
+    #     # log data for IAKF of every speckle
+    #     logfilenameIAKF = directory + "IAKF.asc"
+    #     with open(logfilenameIAKF, "w+") as log:
+    #         speckleString = "\t".join(["Speckle %d" % i
+    #                                    for i in range(numSpeckles)])
+    #         log.write("Im. No." + "\t" + speckleString + "\n")
+    #         numbering = [str(i) for i in range(len(speckleIAKFS[0]))]
+    #         speckleIAKFS.insert(0, numbering)
+    #         log.write(ut.alternateWrite(speckleIAKFS))
 
     print("Creating Ensemble...")
     ens = Ensemble()
@@ -630,72 +650,113 @@ def keyfunc(frame):
 # # ensB.printStats()
 # # ensC.printStats()
 # ensD.printStats()
-
-ensE = readFramesSquare("frames2", squareSize=2)
-ensE.createTimeKey([10000, 10000], [0.015, 0.1])
-ensE.log("ensE.asc")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #------------------------------------------------------------------------------
-# #Testing Area
-# def randIntList(num):
-#     return [np.random.normal() for x in range(num)]
 #
+# ensE = readFramesSquare("frames2", squareSize=2)
+# ensE.createTimeKey([10000, 10000], [0.015, 0.1])
+# ensE.logIAKF("specklesAR20", 1000)
+# ensE.log("ensE.asc")
+
+# ensF = readFramesSquare("frames160x120_400fps", squareSize=1)
+# ensF.createTimeKey([3999], [0.0025])
+# ensF.logIAKF("160x120_400fps", 1000)
+# ensF.log("ensF.asc")
 #
-# dictDur = datetime.now()
+# ensG = readFramesSquare("frames320x240_200fps", squareSize=2)
+# ensG.createTimeKey([2500], [0.005])
+# ensG.logIAKF("320x240_200fps", 1000)
+# ensG.log("ensG.asc")
 #
-# #sets seed for testing
-# np.random.seed(0)
+# ensH = readFramesSquare("frames640x480_200fps", squareSize=4)
+# ensH.createTimeKey([1999], [0.005])
+# ensH.logIAKF("640x480_200fps", 1000)
+# ensH.log("ensH.asc")
+
+# ensI = readFramesSquare("frames640x480_200fps", squareSize=2)
+# ensI.createTimeKey([1999], [0.005])
+# # ensI.logIAKF("640x480_200fps", 1000)
+# ensI.log("ensI.asc")
+
+ensJ = readFramesSquare("framesLangzeit", squareSize=2, logging=False)
+ensJ.createTimeKey([86400], [1])
+ensJ.log("ensJ.asc")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#------------------------------------------------------------------------------
+#Testing Area
+def randIntList(num):
+    return [np.random.normal() for x in range(num)]
+
 #
-# #interactive Test
-# #numImg = int(input("Anzahl Bilder: "))
-# #numSpeckles = int(input("Anzahl Speckles: "))
-# numImg = 10000
-# numSpeckles = 500
+#dictDur = datetime.now()
 #
-# #gives out random normal distribution
-# speckList = [Speckle(np.random.random_sample(numImg)*np.random.normal()) for x in range(numSpeckles)]
+##sets seed for testing
+#np.random.seed(0)
 #
-# #Uniform random distribution
-# #speckList = [Speckle(randIntList(numImg)) for x in range(numSpeckles)]
+##interactive Test
+##numImg = int(input("Anzahl Bilder: "))
+##numSpeckles = int(input("Anzahl Speckles: "))
+#numImg = 100
+#numSpeckles = 5
 #
-# #makes speed test for image number
-# start = datetime.now()
+##gives out random normal distribution
+#speckList = [Speckle(np.random.random_sample(numImg)*np.random.normal()) for x in range(numSpeckles)]
 #
+##Uniform random distribution
+##speckList = [Speckle(randIntList(numImg)) for x in range(numSpeckles)]
 #
-# ens = Ensemble()
-# ens.addSpeckle(speckList)
-# ens.updateEnsemble()
+##makes speed test for image number
+#start = datetime.now()
+
+#intList = []
+#first = True
+#with open("testGolde.txt", "r") as dat:
+#    for line in dat:
+#        if first:
+#            sp = line.split("\t")
+#            for k in range(len(sp)):
+#                intList.append([])
+#            first = False
+#        splitLine = line.split("\t")
+#        for i in range(len(splitLine)):
+#            intList[i].append(float(splitLine[i].strip("\n")))
 #
-# end = datetime.now()
+#speckList = []
 #
-# #prints results of speed tests.
-# print("Algorithm speed test results for", numImg, "Images and", numSpeckles, "Speckles.")
-# print("Time needed for IAKF and List-making:", start-dictDur)
-# print("Time needed for ensemble:", end-start)
+#for lst in intList:
+#    speckList.append(Speckle(lst))
+#ens = Ensemble()
+#ens.addSpeckle(speckList)
+#ens.updateEnsemble()
+
+#end = datetime.now()
+
+#prints results of speed tests.
+#print("Algorithm speed test results for", numImg, "Images and", numSpeckles, "Speckles.")
+#print("Time needed for IAKF and List-making:", start-dictDur)
+#print("Time needed for ensemble:", end-start)
 #
 # compImg = 10
 #
