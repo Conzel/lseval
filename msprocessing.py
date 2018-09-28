@@ -370,7 +370,7 @@ class Ensemble(object):
             name = "Speckle%d.asc" % i
             speck = self.speckles[i]
             tIAKF = speck.getTimeIAKF()
-            with open(directory + "\\" + name, "w+") as log:
+            with open(os.path.join(directory, name), "w+") as log:
                 log.write("time [ms]\t time IAKF")
                 for k in range(len(tIAKF)):
                     log.write("%.6f" % self.timeKey[k] + "\t")
@@ -477,6 +477,7 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
         direction.
         skipEnd: tuple, consisting of int, skips the last squares in (x, y)
         direction.
+        logging: controls creating a log file
     output:
         ens: Ensemble object, containing the speckles found in the picture.
     """
@@ -507,7 +508,7 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
         print("Reading Frame No." + str(count) + "...")
 
         # reads image out to a numpy matrix, dimensions are img length
-        path = directory + "\\" + f
+        path = os.path.join(directory, f)
         imgMat = cv2.imread(path, 0)
 
 # -----------------------------------------------------------------------------
@@ -545,10 +546,9 @@ def readFramesSquare(directory, squareSize=10, logging=True, skipStart=(0, 0),
                     speckleString = "\t".join(["Speckle %d" % i
                                                for i in range(numSpeckles)])
                     log.write("Im. No." + "\t" + speckleString + "\n")
-                firstFlag = False
 
-                # initializing finished
-                firstFlag = False
+            # initializing finished
+            firstFlag = False
 
 # -----------------------------------------------------------------------------
 
